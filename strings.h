@@ -1,0 +1,270 @@
+#ifndef CPP_STRINGS
+#define CPP_STRINGS
+
+#include <vector>
+#include <string>
+#include <map>
+
+namespace Strings {
+	
+	// Convert string to wide string. 
+	std::wstring s2ws(const std::string& s) {
+		const char* str = s.c_str();
+		size_t lenO = s.size();
+		size_t len = s.size() + 1;
+		wchar_t* wstr = new wchar_t[len];
+		#ifdef _WIN32
+			mbstowcs_s(&lenO, wstr, len, str, len);
+		#else
+			mbstowcs(wstr, str, len);
+		#endif
+		std::wstring ret(wstr);
+		delete[] wstr;
+		return ret;
+	}
+
+	// Convert wide string to string. 
+	std::string ws2s(const std::wstring& ws) {
+		const wchar_t* wstr = ws.c_str();
+		size_t lenO = ws.size();
+		size_t len = 2 * ws.size() + 1;
+		char* str = new char[len];
+		#ifdef _WIN32
+    		wcstombs_s(&lenO, str, len-1, wstr, len);
+		#else
+			wcstombs(str, wstr, len);
+		#endif
+		std::string ret(str);
+		delete[] str;
+		return ret;
+	}
+
+	// Format the string, but a bit difference with sprintf(). 
+	// %% means "%". %d means "int". %l means "long long". %s means "string". %c means "char". 
+	std::string strFormat(const std::string format, ...) {
+		std::string dst = "";
+		va_list args;
+		va_start(args, format);
+		const char* tempStr;
+		long long tempLong;
+		int tempInt;
+		char tempChar;
+		int fori;
+		for (fori = 0; fori < format.size(); fori++) {
+			if (format[fori] == '%') {
+				switch (format[fori + 1]) {
+				case '%': {
+					dst += "%";
+					break;
+				}
+				case 's': {
+					tempStr = va_arg(args, const char*);
+					dst += std::string(tempStr);
+					break;
+				}
+				case 'd': {
+					tempInt = va_arg(args, int);
+					dst += std::to_string(tempInt);
+					break;
+				}
+				case 'l': {
+					tempLong = va_arg(args, long long);
+					dst += std::to_string(tempLong);
+					break;
+				}
+				case 'c': {
+					tempChar = (char)va_arg(args, int);
+					dst += tempChar;
+					break;
+				}
+				default: {
+					break;
+				}
+				}
+				fori++;
+			}
+			else {
+				tempChar = format[fori];
+				dst += tempChar;
+			}
+		}
+		va_end(args);
+		return dst;
+	}
+	
+	// Find the position of the substring in the string. 
+	std::vector<int> find(const std::string& str, const std::string& substr) {
+		std::vector<int> vi;
+		for (int i = 0; i < str.size(); i++) {
+			for (int j = 0; j < substr.size(); j++) {
+				if ((i + j) > str.size()) break;
+				if (str[i + j] != substr[j]) break;
+				if (j == (substr.size() - 1)) {
+					vi.push_back(i);
+					break;
+				}
+			}
+		}
+		return vi;
+	}
+
+	// Count how many time the substring appear in the string. 
+	int count(const std::string& str, const std::string& substr) {
+		int cnt = 0;
+		for (int i = 0; i < str.size(); i++) {
+			for (int j = 0; j < substr.size(); j++) {
+				if ((i + j) > str.size()) break;
+				if (str[i + j] != substr[j]) break;
+				if (j == (substr.size() - 1)) {
+					cnt++;
+					break;
+				}
+			}
+		}
+		return cnt;
+	}
+
+	// Slice the string as Python do. 
+	// Include head without tail. 
+	std::string slice(const std::string& baseStr, long long from = 0, long long to = 0, int step = 1) {
+		std::string newStr;
+		if (from == to) to = baseStr.size() - to;
+		if (from < 0) from = baseStr.size() + from;
+		if (to <= 0) to = baseStr.size() + to;
+		if (step == 0) step = 1;
+		if (from > to) step = -step;
+		if (to > baseStr.size()) to = baseStr.size();
+		for (int i = from; (from < to) ? (i < to) : (i > to); i += step) {
+			newStr += baseStr[i];
+		}
+		return newStr;
+	}
+
+	// Replace the occurrence of the string "from" to the string "to" in the string. 
+	std::string replace(const std::string& baseStr, const std::string& from, const std::string& to) {
+		if (baseStr.size() < from.size()) return baseStr;
+		std::string output;
+		const int cnt = count(baseStr, from);
+		const int baseLen = baseStr.size();
+		const int fromLen = from.size();
+		const int toLen = to.size();
+		int cur = 0, curLast = 0;
+		for (int i = 0; i < baseLen; i++) {
+			for (int j = 0; j < from.size(); j++) {
+				if ((i + j) > baseLen) break;
+				if (baseStr[i + j] != from[j]) {
+					output += baseStr[i];
+					break;
+				}
+				if (j == fromLen - 1) {
+					output += to;
+					i += j;
+					break;
+				}
+			}
+		}
+		return output;
+	}
+
+	// Split the string with the separator. 
+	std::vector<std::string> split(const std::string& baseStr, const std::string& sep) {
+		std::vector<std::string> output;
+		if (baseStr.size() < sep.size()) {
+			output.push_back(baseStr);
+			return output;
+		}
+		const int cnt = count(baseStr, sep);
+		const int baseLen = baseStr.size();
+		const int sepLen = sep.size();
+		int cur = 0, curLast = 0;
+		std::string tmp2;
+		for (int i = 0; i < baseLen; i++) {
+			for (int j = 0; j < sepLen; j++) {
+				if ((i + j) > baseLen) break;
+				if (baseStr[i + j] != sep[j]) {
+					tmp2 += baseStr[i];
+					break;
+				}
+				if (j == sepLen - 1) {
+					output.push_back(tmp2);
+					tmp2 = "";
+					i += j;
+					break;
+
+				}
+			}
+		}
+		output.push_back(tmp2);
+		return output;
+	}
+
+	// Join the string with the separator. 
+	std::string join(const std::vector<std::string>& vec, const std::string& joiner) {
+		std::string output;
+		output += vec[0];
+		;	for (int i = 1; i < vec.size(); i++) {
+			output += joiner;
+			output += vec[i];
+		}
+		return output;
+	}
+
+	// Get the string between two strings in the string. 
+	std::string between(const std::string& baseStr, const std::string& start, const std::string& end) {
+		std::string output = baseStr;
+		std::vector<int> startPos = find(baseStr, start);
+		if (start == "" || startPos.size() == 0);
+		else {
+			output = slice(output, startPos[0] + start.size(), output.size());
+		}
+		std::vector<int> endPos = find(output, end);
+		if (end == "" || endPos.size() == 0);
+		else {
+			output = slice(output, 0, endPos[0]);
+
+		}
+		return output;
+	}
+
+	// Format the string of a directory. 
+	std::string formatDirStr(const std::string& path) {
+		if (path.size() == 0) return "";
+		if (path.size() == 1) return path + ":\\";
+		std::string output = "";
+		std::vector<std::string> spPath = split(path, ":");
+		std::string directory;
+
+		if (spPath.size() > 1) {
+			char disk = spPath[0].at(0);
+			output = disk + ":\\";
+			directory += slice(spPath[0], 1, spPath[0].size());
+		}
+		else {
+			directory += spPath[0];
+		}
+		for (int i = 1; i < spPath.size(); i++) directory += spPath[i];
+
+		output += directory;
+		output = replace(output, "/", "\\");
+		while (count(output, "\\\\") != 0) {
+			output = replace(output, "\\\\", "\\");
+		}
+		if (output.at(output.size() - 1) != '\\') output += "\\";
+		if (path[0] == '\\' && path[1] == '\\') {
+			output = "\\" + output;
+		}
+		return output;
+	}
+
+	bool startsWith(const std::string& str, const std::string& substr) {
+		if (str.size() < substr.size()) return false;
+		if (str == substr) return true;
+		for (int i = 0; i < substr.size(); i++) {
+			if (substr[i] != str[i]) return false;
+		}
+		return true;
+	}
+
+}
+
+#endif
