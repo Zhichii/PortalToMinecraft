@@ -18,15 +18,6 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="include\json\json_reader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="include\json\json_value.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="include\json\json_writer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -44,10 +35,10 @@
     <ClInclude Include="data.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="launch.h">
+    <ClInclude Include="versioninfo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="versioninfo.h">
+    <ClInclude Include="accounts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -66,6 +57,6 @@
     <None Include="res\lang\zh-CN.json" />
     <None Include="res\lang\empty.json" />
     <None Include="res\GetJavaVersion.class" />
-    <None Include="res\lang\zh-TW.json" />
+    <None Include="res\lang\zh-MO.json" />
   </ItemGroup>
 </Project>

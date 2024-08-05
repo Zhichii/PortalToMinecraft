@@ -1,7 +1,7 @@
 desktop.ini
 .vs/
 lib_full/
-RvL/log.txt
-RvL/tcl.txt
+RvL/
 x64/
-RvL3-tk
+RvL3-tk/
+lib/res/icon_deprecated

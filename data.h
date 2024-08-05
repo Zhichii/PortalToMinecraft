@@ -11,7 +11,7 @@ Json::Value data;
 
 void flushData() {
 	std::ofstream ofs;
-	ofs.open(S("RvL") + PATH_SEP + "config.json", std::ios::out);
+	ofs.open(S("RvL") + PATHSEP + "config.json", std::ios::out);
 	Json::StyledWriter sw;
 	std::string s = sw.write(data);
 	ofs << s;
@@ -20,7 +20,7 @@ void flushData() {
 
 void initData() {
 	// If the configuration file does not exist, create it. 
-	if (!isExists(S("RvL") + PATH_SEP + "config.json")) {
+	if (!isExists(S("RvL") + PATHSEP + "config.json")) {
 		data = Json::objectValue;
 	}
 	// If it does, read and parse it. 
@@ -54,14 +54,13 @@ void initData() {
 		data["GameDir"] = data["MinecraftDirectory"];
 		data.removeMember("MinecraftDirectory");
 	}
-	if ((!data.isMember("SelectedGameInstance")) && data.isMember("SelectedLaunch")) {
-		data["SelectedGameInstance"] = data["SelectedLaunch"];
+	if (data.isMember("SelectedLaunch")) {
 		data.removeMember("SelectedLaunch");
 	}
-	if ((!data.isMember("Java")) && data.isMember("SelectedJava")) {
-		data["Java"] = data["SelectedJava"];
-		if (data["Java"] == "\"AUTO\"") data["Java"] = "";
-		data.removeMember("SelectedJava");
+	if ((!data.isMember("Javas")) && data.isMember("SelectedJava")) {
+		data["Javas"] = Json::arrayValue;
+		if (data["Javas"] != "\"AUTO\"") data["Javas"].append(data["SelectedJava"]);
+		data["SelectedJava"] = 0;
 	}
 	if (data.isMember("Accounts") && data["Accounts"].type() == Json::stringValue) {
 		Json::Reader r;
@@ -77,10 +76,11 @@ void initData() {
 	// Check missing keys. 
 	if (!data.isMember("Language")) data["Language"] = getDefaultLanguage();
 	if (!data.isMember("GameDir")) data["GameDir"] = "";
-	if (!data.isMember("SelectedGameInstance")) data["SelectedGameInstance"] = -1;
-	if (!data.isMember("Java")) data["Java"] = "";
+	if (!data.isMember("SelectedJava")) data["SelectedJava"] = 0;
+	if (!data.isMember("Javas")) data["Javas"] = Json::arrayValue;
 	if (!data.isMember("Accounts")) data["Accounts"] = Json::arrayValue;
 	if (!data.isMember("SelectedAccount")) data["SelectedAccount"] = -1;
+	/*data["GameDir"] = */Strings::formatDirStr(data["GameDir"].asString());
 	flushData();
 }
 

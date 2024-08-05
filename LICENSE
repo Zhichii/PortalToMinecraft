@@ -1,0 +1,25 @@
+许可协议
+License
+
+本软件使用了如下程序库。在此感谢！
+This software has used the libraries below. Thanks!  
+1. Tcl/Tk from https://tcl.tk 。
+2. fpng.cpp from https://github.com/richgel999/fpng 。
+3. JsonCpp from https://github.com/open-source-parsers/jsoncpp 。
+4. C++ 标准库（C++ Standard Library）由MSVC实现（Implement by MSVC）。
+
+在标明原作者为我的前提下，任何人都可以使用、复制、修改和分发本软件，但是不能以此盈利。
+Everyone can use, copy, modify and distribute this software if declare that the origin author is me, but no making money from this. 
+
+我的昵称为“山邱HlHill”，活跃于微信、QQ、哔哩哔哩、Github、Microsoft Outlook等平台。
+My nickname is "HlHillQiu", and I have accounts on Weixin, QQ, Bilibili, Github, Microsoft Outlook, etc. 
+以下为我的联系方式：
+These are ways to contact to me: 
+Github：https://github.com/Zhichii/ 。
+电子邮箱（E-mail）：qiuyixuan_last@outlook.com。
+QQ号（QQ ID）：858345934。
+哔哩哔哩个人空间（Bilibili Space）：https://space.bilibili.com/521877155 。
+本人为初中生，非休息日期间我可能收不到消息，请见谅。
+I'm a student in middle school. Therefore I may be unable to receive messages during days that are not holidays or weekends. 
+（即使是休息日也不一定能收到消息）
+ (I may not be able to receive messages even during holidays and weekends. )

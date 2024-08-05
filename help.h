@@ -16,8 +16,11 @@ std::vector<HANDLE> HCOE; // Handles Close On End
 #include <termios.h>
 #endif 
 #include "language.h"
-#define PATH_SEP "\\"
-#define ANOTHER_PATH_SEP "/"
+#define PATHSEP "\\"
+#define LPATHSEP L"\\"
+#define O_PATHSEP "/"
+#define O_LPATHSEP L"/"
+#define QUOT "\""
 #define S std::string
 #ifdef _WIN32
 #define SYS_NAME "windows"
@@ -25,11 +28,6 @@ std::vector<HANDLE> HCOE; // Handles Close On End
 #define SYS_NAME "osx"
 #endif
 Language* currentLanguage = nullptr;
-
-// Return the local version of texts. 
-int localize(std::string key) {
-	return 0;// { key, & currentLanguage };
-}
 
 // Return if the path exists. 
 bool isExists(const std::string& pathName) {
@@ -42,6 +40,21 @@ bool isExists(const std::string& pathName) {
 		if (stat(pathName.c_str(), &st) == 0)
 			return true;
 	#endif
+	//DebugBreak();
+	writelog("File [%s] doesn't exists. ", pathName.c_str());
+	return false;
+}
+bool isExists(const std::wstring& pathName) {
+#ifdef _WIN32
+	struct _stat32 st;
+	if (_wstat32(pathName.c_str(), &st) == 0)
+		return true;
+#else
+	struct stat st;
+	if (wstat(pathName.c_str(), &st) == 0)
+		return true;
+#endif
+	writelog("File w[%s] doesn't exists. ", Strings::ws2s(pathName).c_str());
 	return false;
 }
 
@@ -50,6 +63,18 @@ bool isDir(const std::string& pathName) {
 	#ifdef _WIN32
 		struct _stat32 st;
 		if (_stat32(pathName.c_str(), &st) == 0)
+			return st.st_mode & S_IFDIR;
+	#else
+		struct stat st;
+		if (stat(pathName.c_str(), &st) == 0)
+			return st.st_mode & S_IFDIR;
+	#endif
+	else return false;
+}
+bool isDir(const std::wstring& pathName) {
+	#ifdef _WIN32
+		struct _stat32 st;
+		if (_wstat32(pathName.c_str(), &st) == 0)
 			return st.st_mode & S_IFDIR;
 	#else
 		struct stat st;
@@ -251,9 +276,9 @@ int execThrGetOut(std::string cmd, void*c, const std::string& path = "", FUNC_EX
 	return 0;
 }
 
-int execNotThrGetOutInvoke(std::string cmd, void* c, const std::string& path = "", FUNC_EXEC* fe = nullptr) {
+int execNotThrGetOutInvoke(std::wstring cmd, void* c, const std::wstring& path = L"", FUNC_EXEC* fe = nullptr) {
 	HANDLE hRead, hWrite;
-	STARTUPINFOA si;
+	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	SECURITY_ATTRIBUTES sa;
 	ZeroMemory(&sa, sizeof(SECURITY_ATTRIBUTES));
@@ -269,15 +294,15 @@ int execNotThrGetOutInvoke(std::string cmd, void* c, const std::string& path = "
 	ZeroMemory(&si, sizeof(STARTUPINFO));
 
 	si.cb = sizeof(STARTUPINFO);
-	GetStartupInfoA(&si);
+	GetStartupInfoW(&si);
 	si.hStdError = hWrite;
 	si.hStdOutput = hWrite;
-	si.wShowWindow = SW_HIDE;
-	si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-	const char* cwd;
-	if (path != "") cwd = path.c_str();
+	si.wShowWindow = SW_SHOW;
+	si.dwFlags = STARTF_USESTDHANDLES;
+	const wchar_t* cwd;
+	if (path != L"") cwd = path.c_str();
 	else cwd = nullptr;
-	if (!CreateProcessA(NULL, cmd.data(), NULL, NULL, TRUE, NULL,
+	if (!CreateProcessW(NULL, cmd.data(), NULL, NULL, TRUE, NULL,
 		NULL, cwd, &si, &pi)) {
 		DWORD ret = GetLastError();
 		CloseHandle(hRead);

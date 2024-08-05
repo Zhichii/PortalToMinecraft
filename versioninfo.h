@@ -5,7 +5,11 @@
 #include <vector>
 #include <string>
 #include <json/json.h>
+#include <utility>
+#include <windows.h>
+#include <zip/unzip.h>
 #include "help.h"
+#include "data.h"
 
 class VersionInfo {
 public:
@@ -24,13 +28,13 @@ public:
 			this->u = json["url"].asString();
 			this->h = json["sha1"].asString();
 			this->s = json["size"].asInt64();
-			if (json.isMember("path"))
+			il(json.isMember("path"))
 				this->p = json["path"].asString();
 		}
 		[[nodiscard]] std::string url() const { return this->u; }
 		[[nodiscard]] std::string sha1() const { return this->h; }
 		[[nodiscard]] long long size() const { return this->s; }
-		[[nodiscard]] std::string path() const { return this->u; }
+		[[nodiscard]] std::string path() const { return this->p; }
 	};
 	class Rule {
 		bool a;
@@ -58,38 +62,57 @@ public:
 		}
 		Rule(Json::Value json) {
 			this->a = (json["action"] == "allow") && (json["action"] != "disallow");
-			if (json.isMember("os")) {
-				if (json["os"].isMember("name"))
+			il(json.isMember("os")) {
+				il(json["os"].isMember("name"))
 					this->on = json["os"]["name"].asString();
-				if (json["os"].isMember("version"))
+				il(json["os"].isMember("version"))
 					this->ov = json["os"]["version"].asString();
 			}
-			if (json.isMember("features")) {
+			il(json.isMember("features")) {
 				for (const std::string& i : json["features"].getMemberNames()) {
 					f[i]=json["features"][i].asBool();
 				}
 			}
 		}
-		[[nodiscard]] bool isAllow(std::vector<Feature> features) const {
+		[[nodiscard]] bool isAllow(std::vector<Feature> features) {
 			bool allow;
-			if (this->a) {
-				if (this->on == SYS_NAME) {
+			il(this->a) {
+				il(this->on == SYS_NAME) {
 					allow = 1;
 				}
-				else allow = 1;
+				ol il(this->on == "") allow = 1;
+				ol allow = 0;
 			}
-			if (!this->a) {
-				if (this->ov == SYS_NAME) {
+			il(!this->a) {
+				il(this->on == SYS_NAME) {
 					allow = 0;
 				}
-				else allow = 1;
+				ol il(this->on == "") allow = 0;
+				ol allow = 1;
 			}
-			for (Feature& i : features) {
-				if (!f.contains(i.getName())) continue;
-				else {
-					if (i.getValue() != i.getValue()) allow &= 0;
-					else allow &= 1;
+			for (auto& i : this->f) {
+				bool found = false;
+				bool v = false;
+				for (auto& j : features) {
+					il(j.getName() == i.first) {
+						found = true;
+						v = j.getValue();
+						break;
+					}
 				}
+				//il(i.second) {
+				//	il(!found) allow &= 0;
+				//	ol il(v) allow &= 1;
+				//	ol allow &= 0;
+				//}
+				//ol {
+				//	il(!found) allow &= 1;
+				//	ol il(v) allow &= 0;
+				//	ol allow &= 1;
+				//}
+				il(!found) allow &= !i.second;
+				ol il(v) allow &= i.second;
+				ol allow &= !i.second;
 			}
 			return allow;
 		}
@@ -103,40 +126,59 @@ public:
 	public:
 		LibraryItem(Json::Value json) {
 			this->n = json["name"].asString();
-			if (json.isMember("natives")) {
+			il(json.isMember("natives")) {
 				std::vector<std::string> n = json["natives"].getMemberNames();
 				for (const std::string& i : n) {
 					this->nn[i] = json["natives"][i].asString();
 				}
 			}
-			if (json.isMember("downloads")) {
-				if (json["downloads"].isMember("artifact")) {
+			il(json.isMember("downloads")) {
+				il(json["downloads"].isMember("artifact")) {
 					this->a = json["downloads"]["artifact"];
 				}
-				if (json["downloads"].isMember("classifiers")) {
+				il(json["downloads"].isMember("classifiers")) {
 					for (const auto& i : this->nn) {
 						this->cn[i.second] = json["downloads"]["classifiers"][i.second];
 					}
 				}
 			}
-			if (json.isMember("rules")) {
+			il(json.isMember("rules")) {
 				size_t rs = json["rules"].size();
 				for (size_t i = 0; i < rs; i++) {
 					r.push_back(json["rules"][(int)i]);
 				}
 			}
 		}
+		void tryExtractNatives(std::wstring gameDir, std::wstring nativePath) {
+			il(this->nn.size()==0) return;
+			std::wstring temp = gameDir + L"libraries\\" + Strings::s2ws(this->cn[this->nn[SYS_NAME]].path());
+			for (auto& i : temp) {
+				il(temp[i] == O_LPATHSEP[0]) temp[i] = LPATHSEP[0];
+			}
+			HZIP hZip = OpenZip(temp.c_str(), NULL);
+			ZIPENTRY ze;
+			GetZipItem(hZip, -1, &ze);
+			int nums = ze.index;
+			SetUnzipBaseDir(hZip, nativePath.c_str());
+			for (int i = 0; i < nums; i++) {
+				GetZipItem(hZip, i, &ze);
+				int len = lstrlenW(ze.name);
+				il(ze.name[len - 1] == L'l' && ze.name[len - 2] == L'l' && ze.name[len - 3] == L'd' && ze.name[len - 4] == L'.')
+					UnzipItem(hZip, i, ze.name);
+			}
+			CloseZip(hZip);
+		}
 		[[nodiscard]] std::string finalLibPath() {
 			std::string libPath;
-			if (this->a.path() != "") {
+			il(this->a.path() != "") {
 				libPath = Strings::strFormat("libraries\\%s", this->a.path().c_str());
-				for (char& i : libPath) if (i == ANOTHER_PATH_SEP[0]) i = PATH_SEP[0];
+				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
-			else if (this->nn.size() > 0) {
+			ol il(this->nn.size() > 0) {
 				libPath = Strings::strFormat("libraries\\%s", this->cn[this->nn[SYS_NAME]].path().c_str());
-				for (char& i : libPath) if (i == ANOTHER_PATH_SEP[0]) i = PATH_SEP[0];
+				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
-			else {
+			ol {
 				std::vector<std::string> libNameSplit;
 				libNameSplit = Strings::split(this->n, ":");
 				libNameSplit.emplace(libNameSplit.begin() + 2);
@@ -144,18 +186,18 @@ public:
 				
 				libNameSplit = Strings::split(this->n, ":");
 				libPath = libNameSplit[0];
-				for (char& i : libPath) if (i == '.') i = PATH_SEP[0];
+				for (char& i : libPath) il(i == '.') i = PATHSEP[0];
 				libNameSplit[0] = libPath;
-				libPath = Strings::join(libNameSplit, PATH_SEP);
+				libPath = Strings::join(libNameSplit, PATHSEP);
 				libPath = Strings::strFormat("libraries\\%s\\%s-%s.jar",
 					libPath.c_str(), libNameSplit[1].c_str(), libNameSplit[2].c_str());
-				for (char& i : libPath) if (i == ANOTHER_PATH_SEP[0]) i = PATH_SEP[0];
+				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
 			return libPath;
 		}
-		[[nodiscard]] bool allow() const {
-			for (const Rule& i : r) {
-				if (!i.isAllow({})) {
+		[[nodiscard]] bool allow(std::vector<Rule::Feature> features) {
+			for (Rule& i : r) {
+				il(!i.isAllow(features)) {
 					return false;
 				}
 			}
@@ -163,18 +205,18 @@ public:
 		}
 	};
 	class ArgumentItem {
-		std::vector<std::string> value;
+		std::vector<std::string> v;
 		std::vector<Rule> r;
 	public:
 		ArgumentItem(Json::Value json) {
-			if (json.type() == Json::stringValue) {
-				this->value = { json.asString() };
+			il(json.type() == Json::stringValue) {
+				this->v = { json.asString() };
 			}
-			else {
+			ol {
 				for (int i = 0; i < json["value"].size(); i ++) {
-					this->value.push_back(json["value"][i].asString());
+					this->v.push_back(json["value"][i].asString());
 				}
-				if (json.isMember("rules")) {
+				il(json.isMember("rules")) {
 					int rs = json["rules"].size();
 					for (int i = 0; i < rs; i++) {
 						r.push_back(json["rules"][i]);
@@ -182,16 +224,17 @@ public:
 				}
 			}
 		}
-		[[nodiscard]] bool allow(std::vector<Rule::Feature> features) const {
-			for (const Rule& i : r) {
-				if (!i.isAllow(features)) {
+		[[nodiscard]] bool allow(std::vector<Rule::Feature> features) {
+			for (Rule& i : r) {
+				il(!i.isAllow(features)) {
 					return false;
 				}
 			}
 			return true;
 		}
+		std::vector<std::string> value() { return this->v; }
 	};
-	VersionInfo(std::string jsonPath) {
+	VersionInfo(std::wstring jsonPath) {
 		std::ifstream jsonFile(jsonPath);
 		Json::Value info;
 		Json::Reader reader;
@@ -203,15 +246,217 @@ public:
 		this->init(info);
 	}
 	~VersionInfo() {
-		if (this->patches) {
+		il(this->patches!=nullptr) {
 			delete this->patches;
 			this->patches = nullptr;
 		}
 	}
 	std::string getId() { return this->id; }
 	std::string getMainClass() { return this->mainClass; }
+	std::vector<ArgumentItem> getGameArguments() { return this->gameArguments; }
+	std::vector<ArgumentItem> getJvmArguments() { return this->jvmArguments; }
 	std::vector<LibraryItem> getLibraries() { return this->libraries; }
+	std::string getLegacyGameArguments() { return this->legacyGameArguments; }
 	std::string getType() { return this->gameType; }
+	int getJavaVersion() { return this->javaVersion; }
+	std::string getLoggingArgument() { return this->loggingArgument; }
+	std::string getLoggingId() { return this->loggingId; }
+	std::string getAssetIndexId() { return this->assetIndexId; }
+public:
+	std::string genLaunchCmd(std::wstring&cmd, const std::string& gameDir, const int selected_account_index, const std::vector<Rule::Feature> features) {
+		std::string versionPath = "versions"; versionPath += PATHSEP + this->getId() + PATHSEP + this->getId();
+		std::string nativePath = gameDir + versionPath + "-natives\\";
+		il(!isDir(nativePath)) SHCreateDirectoryExA(NULL, nativePath.c_str(), NULL);
+		std::string cp = this->genClasspath(gameDir, versionPath, nativePath, features);
+		std::string finalJava = this->findJava();
+		//* Relogin the account. 
+		int wid = rdata("WindowWidth").asInt(), hei = rdata("WindowHeight").asInt();
+		std::map<std::string, std::string> gameVals;
+		gameVals["${version_name}"]=		QUOT+this->getId()+QUOT;
+		gameVals["${game_directory}"]=		QUOT+Strings::replace(gameDir,"\\","\\\\")+QUOT;
+		gameVals["${assets_root}"]=			"assets";
+		gameVals["${assets_index_name}"]=	this->getAssetIndexId();
+		gameVals["${version_type}"]=		this->getType();
+		gameVals["${auth_access_token}"]=	rdata("Accounts")[selected_account_index]["userToken"].asString();
+		gameVals["${auth_session}"]=		rdata("Accounts")[selected_account_index]["userToken"].asString();
+		gameVals["${auth_player_name}"]=	rdata("Accounts")[selected_account_index]["userName"].asString();
+		gameVals["${auth_uuid}"]=			rdata("Accounts")[selected_account_index]["userId"].asString();
+		gameVals["${clientId}"]=			rdata("Accounts")[selected_account_index]["userId"].asString();
+		gameVals["${client_id}"]=			rdata("Accounts")[selected_account_index]["userId"].asString();
+		gameVals["${user_type}"]=			(rdata("Accounts")[selected_account_index]["usrType"].asString()=="please_support") ? ("legacy") : ("msa");
+		gameVals["${resolution_width}"]=	std::to_string(wid);
+		gameVals["${resolution_height}"]=	std::to_string(hei);
+		gameVals["${natives_directory}"]=	nativePath;
+		gameVals["${user_properties}"]=		"{}";
+		gameVals["${classpath_separator}"]=	";";
+		gameVals["${library_directory}"]=	"libraries\\";
+		std::map<std::string, std::string> jvmVals;
+		jvmVals["${classpath}"]=			cp;
+		jvmVals["${natives_directory}"]=	nativePath;
+		jvmVals["${launcher_name}"]=		"RiverLauncher";
+		jvmVals["${launcher_version}"]=		"3.0.0.0";
+		std::string jvmArgs = this->genJvmArgs(features, jvmVals);
+		std::string gameArgs = this->genGameArgs(features, gameVals);
+		il(gameArgs == "") {
+			cmd = L"";
+			return "";
+		}
+		std::string output(16384,'\0');
+		output = QUOT + finalJava + QUOT;
+		output += " \"-Dminecraft.client.jar="+versionPath+".jar\"";
+		il(Strings::count(jvmArgs, "-Djava.library.path") == 0) {
+			output += " \"-Djava.library.path="+versionPath+"-natives\"";
+		}
+		il(this->getLoggingArgument() != "") {
+			output += " " + Strings::replace(this->getLoggingArgument(),
+				"${path}", QUOT+this->getId()+PATHSEP+this->getLoggingId()+QUOT);
+		}
+		output += " -Xmn"+std::to_string(4000/*//* Memory Allocation! */ ) + "m -XX:+UseG1GC -XX:-UseAdaptiveSizePolicy -XX:-OmitStackTraceInFastThrow -Dlog4j2.formatMsgNoLookups=true";
+		output += " " + jvmArgs + " " + this->getMainClass() + " " + gameArgs;
+		il(Strings::count(gameArgs, "--width") == 0 && 0) {
+			writelog("Version %s doesn't contain --width argument. Appending --width and --height. ");
+			output += Strings::strFormat(" --width %d --height %d", wid, hei);
+		}
+		cmd = Strings::s2ws(output);
+		return output;
+	}
+protected:
+	std::string genClasspath(const std::string& gameDir, const std::string& versionPath, const std::string& nativePath, const std::vector<Rule::Feature>& features) {
+		std::vector<std::string> libsVec;
+		std::wstring gameDirW = Strings::s2ws(gameDir);
+		std::wstring nativePathW = Strings::s2ws(nativePath);
+		for (auto& i : this->getLibraries()) {
+			il(i.allow(features)) {
+				libsVec.push_back(i.finalLibPath());
+				i.tryExtractNatives(gameDirW, nativePathW);
+			}
+		}
+		libsVec.push_back("\"" + versionPath + ".jar\"");
+		return Strings::join(libsVec, ";");
+	}
+	std::string genJvmArgs(const std::vector<Rule::Feature>& features, std::map<std::string,std::string>& jvmVals) {
+		std::vector<std::string> jvmArgVec;
+		for (auto& i : this->getJvmArguments()) {
+			il(i.allow(features)) {
+				for (auto& j : i.value()) {
+					std::string k = j;
+					auto l = Strings::split(k, "=");
+					for (auto& m : l) {
+						if (jvmVals.contains(m)) m = jvmVals[m];
+					}
+					k = Strings::join(l, "=");
+					il(Strings::count(k, " ")) jvmArgVec.push_back("\""+k+"\"");
+					ol jvmArgVec.push_back(k);
+				}
+			}
+		}
+		return Strings::join(jvmArgVec, " ");
+	}
+	std::string genGameArgs(const std::vector<Rule::Feature>& features, std::map<std::string, std::string>& gameVals) {
+		std::string gameArg;
+		bool flagOptiFineForge = false;
+		bool flagForge = false;
+		bool flagOptiFine = false;
+		bool flag__tweakClass = false;
+		il(this->getGameArguments().size() > 0) {
+			std::vector<std::string> gameArgVec;
+			for (auto& i : this->getGameArguments()) {
+				il(i.allow(features)) {
+					for (auto& j : i.value()) {
+						std::string k = j;
+						il(gameVals.contains(k)) k = gameVals[k];
+						il(k == "--tweakClass") {
+							flag__tweakClass = true;
+							continue;
+						}
+						il(flag__tweakClass && k=="net.minecraftforge.fml.common.launcher.FMLTweaker") {
+							gameArgVec.push_back("--tweakClass");
+							flagForge = true;
+							flag__tweakClass = false;
+						}
+						il(flag__tweakClass && k=="optifine.OptiFineForgeTweaker") {
+							flagOptiFineForge = true;
+							flag__tweakClass = false;
+							continue;
+						}
+						il(flag__tweakClass&& k == "optifine.OptiFineForgeTweaker") {
+							flagOptiFine = true;
+							flag__tweakClass = false;
+							continue;
+						}
+						il(Strings::count(k, " ")) gameArgVec.push_back("\""+k+"\"");
+						ol gameArgVec.push_back(k);
+					}
+				}
+			}
+			// If I do not do this, it seemed to be crash. 
+			il((flagOptiFine&&flagForge)||flagOptiFineForge) {
+				gameArgVec.push_back("--tweakClass");
+				gameArgVec.push_back("optifine.OptiFineForgeTweaker");
+			}
+			gameArg = Strings::join(gameArgVec, " ");
+		}
+		el (this->getLegacyGameArguments() != "") {
+			gameArg = this->getLegacyGameArguments();
+			for (const auto& i : gameVals) {
+				gameArg = Strings::replace(gameArg, i.first, i.second);
+			}
+			il(Strings::count(gameArg, " --tweakClass optifine.OptiFineForgeTweaker")) {
+				gameArg = Strings::replace(gameArg, " --tweakClass optifine.OptiFineForgeTweaker", "");
+				gameArg += " --tweakClass optifine.OptiFineForgeTweaker";
+			}
+			el(Strings::count(gameArg, " --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker") != 0) {
+				il(Strings::count(gameArg, " --tweakClass optifine.OptiFineTweaker") != 0) {
+					gameArg = Strings::replace(gameArg, " --tweakClass optifine.OptiFineTweaker", "");
+					gameArg += " --tweakClass optifine.OptiFineForgeTweaker";
+				}
+			}
+		}
+		ol {
+			call({ "msgbx","error","minecraft.no_args","error" });
+			return "";
+		}
+		return gameArg;
+	}
+	std::string findJava() {
+		std::string finalJava;
+		int javaVersion = this->getJavaVersion();
+		il(javaVersion > 17) javaVersion = 21;
+		el (javaVersion > 11) javaVersion = 17;
+		ol javaVersion = 8;
+		std::vector<std::string> javas;
+		for (auto& i : rdata("Javas")) {
+			javas.push_back(i.asString());
+		}
+		int selectedJava = rdata("SelectedJava").asInt();
+		il(selectedJava <= 0) {
+			il(selectedJava == -1) {
+				//* Command "where". 
+			}
+			bool flag = 1;
+			// Get the compatible Java. 
+			for (auto& java : javas) {
+				std::string tmpEachJava = execGetOut("\"" + java + "\" GetJavaVersion", "RvL\\");
+				std::vector<std::string> javaInfo = Strings::split(tmpEachJava, "\r\n");
+				il(javaInfo[1] != "64") continue;
+				int curVersion = 0;
+				il(javaInfo[0][1] == '.') curVersion = atoi(javaInfo[0].c_str() + 2);
+				ol curVersion = atoi(javaInfo[0].c_str());
+				il(curVersion > 17) curVersion = 21;
+				el (curVersion > 11) curVersion = 17;
+				ol curVersion = 8;
+				il(curVersion == javaVersion) {
+					finalJava = java;
+					flag = 0;
+					break;
+				}
+			}
+		}
+		ol {
+			finalJava = javas[selectedJava];
+		}
+		return finalJava;
+	}
 protected:
 	void init(Json::Value info) {
 		this->id = info["id"].asString();
@@ -222,33 +467,42 @@ protected:
 		this->complianceLevel = info["complianceLevel"].asInt();
 		this->javaVersion = info["javaVersion"]["majorVersion"].asInt();
 		Json::Value downloads = info["downloads"];
-		if (downloads.isMember("client_mappings")) {
+		il(downloads.isMember("client_mappings")) {
 			this->clientMappings = File(downloads["client_mappings"]);
 			this->serverMappings = File(downloads["server_mappings"]);
 		}
 		this->client = File(downloads["client"]);
 		this->server = File(downloads["server"]);
-		this->loggingFile = File(info["logging"]["client"]["file"]);
-		this->loggingId = info["logging"]["client"]["file"]["id"].asString();
-		this->loggingArgument = info["logging"]["client"]["argument"].asString();
+		il(info.isMember("logging")) {
+			il(info["logging"].isMember("client")) {
+				this->loggingFile = File(info["logging"]["client"]["file"]);
+				this->loggingId = info["logging"]["client"]["file"]["id"].asString();
+				this->loggingArgument = info["logging"]["client"]["argument"].asString();
+			}
+		}
+		ol {
+			this->loggingFile = {};
+			this->loggingId = {};
+			this->loggingArgument = {};
+		}
 		this->gameType = info["type"].asString();
-		if (info.isMember("arguments")) {
+		il(info.isMember("arguments")) {
 			for (int i = 0; i < info["arguments"]["game"].size(); i ++) {
 				this->gameArguments.push_back(info["arguments"]["game"][i]);
 			}
 			for (int i = 0; i < info["arguments"]["jvm"].size(); i++) {
-				this->jvmArguments.push_back(info["arguments"]["game"][i]);
+				this->jvmArguments.push_back(info["arguments"]["jvm"][i]);
 			}
 		}
-		if (info.isMember("minecraftArguments")) {
+		il(info.isMember("minecraftArguments")) {
 			this->legacyGameArguments = info["minecraftArguments"].asString();
 			this->jvmArguments = { Json::Value("-cp"), Json::Value("${classpath}") };
 		}
-		if (info.isMember("patches") &&
-			(info["patches"].size() > 0)) {
-			this->patches = new VersionInfo(info["patches"][0]);
-		}
-		else this->patches = nullptr;
+		//il(info.isMember("patches") &&
+		//	(info["patches"].size() > 0)) {
+		//	this->patches = new VersionInfo(info["patches"][0]);
+		//}
+		this->patches = nullptr;
 		for (Json::Value i : info["libraries"]) {
 			this->libraries.push_back(i);
 		}

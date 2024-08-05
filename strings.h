@@ -12,13 +12,20 @@ namespace Strings {
 		const char* str = s.c_str();
 		size_t lenO = s.size();
 		size_t len = s.size() + 1;
+		size_t lenO_ = lenO;
+		size_t len_ = len;
 		wchar_t* wstr = new wchar_t[len];
+		memset(wstr, 0, len*2);
 		#ifdef _WIN32
-			mbstowcs_s(&lenO, wstr, len, str, len);
+			errno_t i = MultiByteToWideChar(CP_UTF8, MB_USEGLYPHCHARS, str, lenO, wstr, len);
 		#else
 			mbstowcs(wstr, str, len);
 		#endif
 		std::wstring ret(wstr);
+		if (i == EILSEQ) {
+			writelog("Failed to convert string to wstring. ");
+			writelog("LenO: %u. Len: %u. Errcode: %u", lenO_, len_, i);
+		}
 		delete[] wstr;
 		return ret;
 	}
@@ -28,68 +35,40 @@ namespace Strings {
 		const wchar_t* wstr = ws.c_str();
 		size_t lenO = ws.size();
 		size_t len = 2 * ws.size() + 1;
+		size_t lenO_ = lenO;
+		size_t len_ = len;
 		char* str = new char[len];
+		memset(str, 0, len);
 		#ifdef _WIN32
-    		wcstombs_s(&lenO, str, len-1, wstr, len);
+			errno_t i = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, wstr, lenO, str, len, NULL, NULL);// wcstombs_s(&lenO, str, len - 1, wstr, len);
 		#else
-			wcstombs(str, wstr, len);
+			errno_t i = wcstombs(str, wstr, len);
 		#endif
 		std::string ret(str);
+		if (i == EILSEQ) {
+			writelog("Failed to convert wstring to string. ");
+			writelog("LenO: %u. Len: %u. Errcode: %u", lenO_, len_, i);
+		}
 		delete[] str;
 		return ret;
 	}
 
-	// Format the string, but a bit difference with sprintf(). 
-	// %% means "%". %d means "int". %l means "long long". %s means "string". %c means "char". 
+	// Format the string, same with sprintf(). Note: use .c_str() in the arguments. 
 	std::string strFormat(const std::string format, ...) {
 		std::string dst = "";
 		va_list args;
 		va_start(args, format);
-		const char* tempStr;
-		long long tempLong;
-		int tempInt;
-		char tempChar;
-		int fori;
-		for (fori = 0; fori < format.size(); fori++) {
-			if (format[fori] == '%') {
-				switch (format[fori + 1]) {
-				case '%': {
-					dst += "%";
-					break;
-				}
-				case 's': {
-					tempStr = va_arg(args, const char*);
-					dst += std::string(tempStr);
-					break;
-				}
-				case 'd': {
-					tempInt = va_arg(args, int);
-					dst += std::to_string(tempInt);
-					break;
-				}
-				case 'l': {
-					tempLong = va_arg(args, long long);
-					dst += std::to_string(tempLong);
-					break;
-				}
-				case 'c': {
-					tempChar = (char)va_arg(args, int);
-					dst += tempChar;
-					break;
-				}
-				default: {
-					break;
-				}
-				}
-				fori++;
-			}
-			else {
-				tempChar = format[fori];
-				dst += tempChar;
-			}
-		}
+		_vsprintf_s_l(formatCacheStr, 16384, format.c_str(), NULL, args);
 		va_end(args);
-		return dst;
+		return formatCacheStr;
+	}
+	std::wstring strFormat(const std::wstring format, ...) {
+		std::string dst = "";
+		va_list args;
+		va_start(args, format);
+		_vswprintf_s_l(formatCacheStrW, 16384, format.c_str(), NULL, args);
+		va_end(args);
+		return formatCacheStrW;
 	}
 	
 	// Find the position of the substring in the string. 
@@ -110,6 +89,20 @@ namespace Strings {
 
 	// Count how many time the substring appear in the string. 
 	int count(const std::string& str, const std::string& substr) {
+		int cnt = 0;
+		for (int i = 0; i < str.size(); i++) {
+			for (int j = 0; j < substr.size(); j++) {
+				if ((i + j) > str.size()) break;
+				if (str[i + j] != substr[j]) break;
+				if (j == (substr.size() - 1)) {
+					cnt++;
+					break;
+				}
+			}
+		}
+		return cnt;
+	}
+	int count(const std::wstring& str, const std::wstring& substr) {
 		int cnt = 0;
 		for (int i = 0; i < str.size(); i++) {
 			for (int j = 0; j < substr.size(); j++) {
@@ -144,6 +137,30 @@ namespace Strings {
 	std::string replace(const std::string& baseStr, const std::string& from, const std::string& to) {
 		if (baseStr.size() < from.size()) return baseStr;
 		std::string output;
+		const int cnt = count(baseStr, from);
+		const int baseLen = baseStr.size();
+		const int fromLen = from.size();
+		const int toLen = to.size();
+		int cur = 0, curLast = 0;
+		for (int i = 0; i < baseLen; i++) {
+			for (int j = 0; j < from.size(); j++) {
+				if ((i + j) > baseLen) break;
+				if (baseStr[i + j] != from[j]) {
+					output += baseStr[i];
+					break;
+				}
+				if (j == fromLen - 1) {
+					output += to;
+					i += j;
+					break;
+				}
+			}
+		}
+		return output;
+	}
+	std::wstring replace(const std::wstring& baseStr, const std::wstring& from, const std::wstring& to) {
+		if (baseStr.size() < from.size()) return baseStr;
+		std::wstring output;
 		const int cnt = count(baseStr, from);
 		const int baseLen = baseStr.size();
 		const int fromLen = from.size();
@@ -200,6 +217,7 @@ namespace Strings {
 
 	// Join the string with the separator. 
 	std::string join(const std::vector<std::string>& vec, const std::string& joiner) {
+		if (vec.size() == 0) return "";
 		std::string output;
 		output += vec[0];
 		;	for (int i = 1; i < vec.size(); i++) {
@@ -228,6 +246,7 @@ namespace Strings {
 
 	// Format the string of a directory. 
 	std::string formatDirStr(const std::string& path) {
+		writelog("A[%s", path.c_str());
 		if (path.size() == 0) return "";
 		if (path.size() == 1) return path + ":\\";
 		std::string output = "";
@@ -243,6 +262,7 @@ namespace Strings {
 			directory += spPath[0];
 		}
 		for (int i = 1; i < spPath.size(); i++) directory += spPath[i];
+		writelog("B[%s", directory.c_str());
 
 		output += directory;
 		output = replace(output, "/", "\\");
@@ -253,6 +273,7 @@ namespace Strings {
 		if (path[0] == '\\' && path[1] == '\\') {
 			output = "\\" + output;
 		}
+		writelog("C[%s", output.c_str());
 		return output;
 	}
 

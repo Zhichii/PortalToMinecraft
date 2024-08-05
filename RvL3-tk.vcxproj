@@ -143,16 +143,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="include\json\json_reader.cpp" />
-    <ClCompile Include="include\json\json_value.cpp" />
-    <ClCompile Include="include\json\json_writer.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="accounts.h" />
     <ClInclude Include="data.h" />
     <ClInclude Include="help.h" />
     <ClInclude Include="language.h" />
-    <ClInclude Include="launch.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="strings.h" />
     <ClInclude Include="versioninfo.h" />
