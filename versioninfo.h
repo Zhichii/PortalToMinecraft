@@ -149,8 +149,8 @@ public:
 				}
 			}
 		}
-		void tryExtractNatives(std::wstring gameDir, std::wstring nativePath) {
-			il(this->nn.size()==0) return;
+		bool tryExtractNatives(std::wstring gameDir, std::wstring nativePath) {
+			il(this->nn.size()==0) return false;
 			std::wstring temp = gameDir + L"libraries\\" + Strings::s2ws(this->cn[this->nn[SYS_NAME]].path());
 			for (auto& i : temp) {
 				il(temp[i] == O_LPATHSEP[0]) temp[i] = LPATHSEP[0];
@@ -167,8 +167,15 @@ public:
 					UnzipItem(hZip, i, ze.name);
 			}
 			CloseZip(hZip);
+			return true;
 		}
-		[[nodiscard]] std::string finalLibPath() {
+		std::string libName() {
+			std::vector<std::string> libNameSplit;
+			libNameSplit = Strings::split(this->n, ":");
+			libNameSplit.emplace(libNameSplit.begin() + 2);
+			return Strings::join(libNameSplit, ":");
+		}
+		std::string finalLibPath() {
 			std::string libPath;
 			il(this->a.path() != "") {
 				libPath = Strings::strFormat("libraries\\%s", this->a.path().c_str());
@@ -195,7 +202,7 @@ public:
 			}
 			return libPath;
 		}
-		[[nodiscard]] bool allow(std::vector<Rule::Feature> features) {
+		bool allow(std::vector<Rule::Feature> features) {
 			for (Rule& i : r) {
 				il(!i.isAllow(features)) {
 					return false;
@@ -263,12 +270,17 @@ public:
 	std::string getLoggingId() { return this->loggingId; }
 	std::string getAssetIndexId() { return this->assetIndexId; }
 public:
-	std::string genLaunchCmd(std::wstring&cmd, const std::string& gameDir, const int selected_account_index, const std::vector<Rule::Feature> features) {
+	std::string genLaunchCmd(std::wstring&cmd, const std::string& gameDir, const int selectedAccount, const std::vector<Rule::Feature> features) {
+		writelog("Generating launching command: %s, \"%s\". ", this->getId().c_str(), gameDir.c_str());
 		std::string versionPath = "versions"; versionPath += PATHSEP + this->getId() + PATHSEP + this->getId();
 		std::string nativePath = gameDir + versionPath + "-natives\\";
 		il(!isDir(nativePath)) SHCreateDirectoryExA(NULL, nativePath.c_str(), NULL);
+		writelog("Generating classpath. ");
 		std::string cp = this->genClasspath(gameDir, versionPath, nativePath, features);
+		writelog("Classpath is ready. ");
 		std::string finalJava = this->findJava();
+		writelog("Found Java \"%s\". ", finalJava.c_str());
+		writelog("Reloging-in the account. ");
 		//* Relogin the account. 
 		int wid = rdata("WindowWidth").asInt(), hei = rdata("WindowHeight").asInt();
 		std::map<std::string, std::string> gameVals;
@@ -277,13 +289,13 @@ public:
 		gameVals["${assets_root}"]=			"assets";
 		gameVals["${assets_index_name}"]=	this->getAssetIndexId();
 		gameVals["${version_type}"]=		this->getType();
-		gameVals["${auth_access_token}"]=	rdata("Accounts")[selected_account_index]["userToken"].asString();
-		gameVals["${auth_session}"]=		rdata("Accounts")[selected_account_index]["userToken"].asString();
-		gameVals["${auth_player_name}"]=	rdata("Accounts")[selected_account_index]["userName"].asString();
-		gameVals["${auth_uuid}"]=			rdata("Accounts")[selected_account_index]["userId"].asString();
-		gameVals["${clientId}"]=			rdata("Accounts")[selected_account_index]["userId"].asString();
-		gameVals["${client_id}"]=			rdata("Accounts")[selected_account_index]["userId"].asString();
-		gameVals["${user_type}"]=			(rdata("Accounts")[selected_account_index]["usrType"].asString()=="please_support") ? ("legacy") : ("msa");
+		gameVals["${auth_access_token}"]=	rdata("Accounts")[selectedAccount]["userToken"].asString();
+		gameVals["${auth_session}"]=		rdata("Accounts")[selectedAccount]["userToken"].asString();
+		gameVals["${auth_player_name}"]=	rdata("Accounts")[selectedAccount]["userName"].asString();
+		gameVals["${auth_uuid}"]=			rdata("Accounts")[selectedAccount]["userId"].asString();
+		gameVals["${clientId}"]=			rdata("Accounts")[selectedAccount]["userId"].asString();
+		gameVals["${client_id}"]=			rdata("Accounts")[selectedAccount]["userId"].asString();
+		gameVals["${user_type}"]=			(rdata("Accounts")[selectedAccount]["userType"].asString()=="mojang") ? ("msa") : ("legacy");
 		gameVals["${resolution_width}"]=	std::to_string(wid);
 		gameVals["${resolution_height}"]=	std::to_string(hei);
 		gameVals["${natives_directory}"]=	nativePath;
@@ -295,41 +307,44 @@ public:
 		jvmVals["${natives_directory}"]=	nativePath;
 		jvmVals["${launcher_name}"]=		"RiverLauncher";
 		jvmVals["${launcher_version}"]=		"3.0.0.0";
+		writelog("Generating JVM arguments. ");
 		std::string jvmArgs = this->genJvmArgs(features, jvmVals);
+		writelog("Generating game arguments. ");
 		std::string gameArgs = this->genGameArgs(features, gameVals);
+		writelog("Connecting the arguments. ");
 		il(gameArgs == "") {
 			cmd = L"";
 			return "";
 		}
 		std::string output(16384,'\0');
 		output = QUOT + finalJava + QUOT;
-		output += " \"-Dminecraft.client.jar="+versionPath+".jar\"";
 		il(Strings::count(jvmArgs, "-Djava.library.path") == 0) {
 			output += " \"-Djava.library.path="+versionPath+"-natives\"";
 		}
 		il(this->getLoggingArgument() != "") {
 			output += " " + Strings::replace(this->getLoggingArgument(),
-				"${path}", QUOT+this->getId()+PATHSEP+this->getLoggingId()+QUOT);
+				"${path}", std::string{}+QUOT+"versions"+PATHSEP+this->getId()+PATHSEP+this->getLoggingId()+QUOT);
 		}
 		output += " -Xmn"+std::to_string(4000/*//* Memory Allocation! */ ) + "m -XX:+UseG1GC -XX:-UseAdaptiveSizePolicy -XX:-OmitStackTraceInFastThrow -Dlog4j2.formatMsgNoLookups=true";
 		output += " " + jvmArgs + " " + this->getMainClass() + " " + gameArgs;
-		il(Strings::count(gameArgs, "--width") == 0 && 0) {
-			writelog("Version %s doesn't contain --width argument. Appending --width and --height. ");
-			output += Strings::strFormat(" --width %d --height %d", wid, hei);
-		}
 		cmd = Strings::s2ws(output);
+		writelog("Finish generating launching command. ");
 		return output;
 	}
 protected:
 	std::string genClasspath(const std::string& gameDir, const std::string& versionPath, const std::string& nativePath, const std::vector<Rule::Feature>& features) {
+		std::map<std::string,std::string> available; // For fixing libs duplicating. 
 		std::vector<std::string> libsVec;
 		std::wstring gameDirW = Strings::s2ws(gameDir);
 		std::wstring nativePathW = Strings::s2ws(nativePath);
 		for (auto& i : this->getLibraries()) {
 			il(i.allow(features)) {
-				libsVec.push_back(i.finalLibPath());
-				i.tryExtractNatives(gameDirW, nativePathW);
+				if (i.tryExtractNatives(gameDirW, nativePathW)) continue;
+				available[i.libName()] = i.finalLibPath();
 			}
+		}
+		for (const auto& i : available) {
+			libsVec.push_back(i.second);
 		}
 		libsVec.push_back("\"" + versionPath + ".jar\"");
 		return Strings::join(libsVec, ";");
@@ -429,7 +444,7 @@ protected:
 			javas.push_back(i.asString());
 		}
 		int selectedJava = rdata("SelectedJava").asInt();
-		il(selectedJava <= 0) {
+		il(selectedJava < 0) {
 			il(selectedJava == -1) {
 				//* Command "where". 
 			}

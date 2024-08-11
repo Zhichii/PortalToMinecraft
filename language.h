@@ -136,8 +136,8 @@ std::string getDefaultLanguage() {
 			return "zh-CN";
 		}
 	#else
-		return "en-GB";
 	#endif
+	return "en-GB";
 }
 
 #endif //RIVERLAUNCHER3_HELP_H

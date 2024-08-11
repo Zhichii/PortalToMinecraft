@@ -24,8 +24,6 @@
 	"minecraft.able": "成功启动 Minecraft！",
 	"accounts.add": "登录一个新的账户。",
 	"accounts.add.prompt": "Sign in a new account. ",
-	"accounts.microsoft": "微软账户", 
-	"accounts.please_support": "accounts.please_support",
 	"settings.gamedir": "游戏目录", 
 	"settings.gamedir.ask": "输入游戏目录："
 }

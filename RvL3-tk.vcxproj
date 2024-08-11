@@ -138,8 +138,11 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Netapi32.lib;msvcrt.lib;H:\RvL3-tk\libs\itcl424ts.lib;H:\RvL3-tk\libs\itclstub424.lib;H:\RvL3-tk\libs\sqlite3442ts.lib;H:\RvL3-tk\libs\tcl86ts.lib;H:\RvL3-tk\libs\tcldde14s.lib;H:\RvL3-tk\libs\tclreg13s.lib;H:\RvL3-tk\libs\tclstub86.lib;H:\RvL3-tk\libs\tdbc117ts.lib;H:\RvL3-tk\libs\tdbcmysql117ts.lib;H:\RvL3-tk\libs\tdbcodbc117ts.lib;H:\RvL3-tk\libs\tdbcpostgres117ts.lib;H:\RvL3-tk\libs\tdbcstub117.lib;H:\RvL3-tk\libs\thread289ts.lib;H:\RvL3-tk\libs\tk86ts.lib;H:\RvL3-tk\libs\tkstub86.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Netapi32.lib;msvcrt.lib;H:\RvL3-tk\libs\itcl424ts.lib;H:\RvL3-tk\libs\itclstub424.lib;H:\RvL3-tk\libs\sqlite3442ts.lib;H:\RvL3-tk\libs\tcl86ts.lib;H:\RvL3-tk\libs\tcldde14s.lib;H:\RvL3-tk\libs\tclreg13s.lib;H:\RvL3-tk\libs\tclstub86.lib;H:\RvL3-tk\libs\tdbc117ts.lib;H:\RvL3-tk\libs\tdbcmysql117ts.lib;H:\RvL3-tk\libs\tdbcodbc117ts.lib;H:\RvL3-tk\libs\tdbcpostgres117ts.lib;H:\RvL3-tk\libs\tdbcstub117.lib;H:\RvL3-tk\libs\thread289ts.lib;H:\RvL3-tk\libs\tk86ts.lib;H:\RvL3-tk\libs\tkstub86.lib;H:\RvL3-tk\libs\libpng16_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <HeapReserveSize>
+      </HeapReserveSize>
+      <StackReserveSize>16777216</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

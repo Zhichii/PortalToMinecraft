@@ -16,11 +16,6 @@ std::vector<HANDLE> HCOE; // Handles Close On End
 #include <termios.h>
 #endif 
 #include "language.h"
-#define PATHSEP "\\"
-#define LPATHSEP L"\\"
-#define O_PATHSEP "/"
-#define O_LPATHSEP L"/"
-#define QUOT "\""
 #define S std::string
 #ifdef _WIN32
 #define SYS_NAME "windows"

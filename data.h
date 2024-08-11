@@ -76,11 +76,13 @@ void initData() {
 	// Check missing keys. 
 	if (!data.isMember("Language")) data["Language"] = getDefaultLanguage();
 	if (!data.isMember("GameDir")) data["GameDir"] = "";
-	if (!data.isMember("SelectedJava")) data["SelectedJava"] = 0;
+	if (!data.isMember("SelectedJava")) data["SelectedJava"] = -1;
+	if (!data.isMember("WindowHeight")) data["WindowHeight"] = 0;
+	if (!data.isMember("WindowWidth")) data["WindowWidth"] = 0;
 	if (!data.isMember("Javas")) data["Javas"] = Json::arrayValue;
 	if (!data.isMember("Accounts")) data["Accounts"] = Json::arrayValue;
-	if (!data.isMember("SelectedAccount")) data["SelectedAccount"] = -1;
-	/*data["GameDir"] = */Strings::formatDirStr(data["GameDir"].asString());
+	if (!data.isMember("SelectedAccount")) data["SelectedAccount"] = 0;
+	data["GameDir"] = Strings::formatDirStr(data["GameDir"].asString());
 	flushData();
 }
 

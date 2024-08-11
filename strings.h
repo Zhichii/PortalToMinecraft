@@ -244,39 +244,7 @@ namespace Strings {
 		return output;
 	}
 
-	// Format the string of a directory. 
-	std::string formatDirStr(const std::string& path) {
-		writelog("A[%s", path.c_str());
-		if (path.size() == 0) return "";
-		if (path.size() == 1) return path + ":\\";
-		std::string output = "";
-		std::vector<std::string> spPath = split(path, ":");
-		std::string directory;
-
-		if (spPath.size() > 1) {
-			char disk = spPath[0].at(0);
-			output = disk + ":\\";
-			directory += slice(spPath[0], 1, spPath[0].size());
-		}
-		else {
-			directory += spPath[0];
-		}
-		for (int i = 1; i < spPath.size(); i++) directory += spPath[i];
-		writelog("B[%s", directory.c_str());
-
-		output += directory;
-		output = replace(output, "/", "\\");
-		while (count(output, "\\\\") != 0) {
-			output = replace(output, "\\\\", "\\");
-		}
-		if (output.at(output.size() - 1) != '\\') output += "\\";
-		if (path[0] == '\\' && path[1] == '\\') {
-			output = "\\" + output;
-		}
-		writelog("C[%s", output.c_str());
-		return output;
-	}
-
+	// Check if str starts with substr. 
 	bool startsWith(const std::string& str, const std::string& substr) {
 		if (str.size() < substr.size()) return false;
 		if (str == substr) return true;
@@ -284,6 +252,37 @@ namespace Strings {
 			if (substr[i] != str[i]) return false;
 		}
 		return true;
+	}
+
+	// Format the string of a directory. 
+	std::string formatDirStr(const std::string& path) {
+		std::string o = path;
+		for (int i = 0; i < o.size(); i++) {
+			if (o[i] == O_PATHSEP[0]) {
+				o[i] = PATHSEP[0];
+			}
+		}
+		while (count(o, DPATHSEP)) {
+			o = replace(o, DPATHSEP, PATHSEP);
+		}
+		std::vector<int> pos = find(o, ":");
+		if (pos.size() != 0) {
+			int p = pos[0];
+			o[p] = '?';
+			o = replace(o, ":", "");
+			o[p] = ':';
+			if (o.size() > p+1) {
+				if (o[p+1] != PATHSEP[0])
+					o = replace(o, ":", std::string(":") + PATHSEP);
+			}
+		}
+		if (startsWith(path, "\\\\")) {
+			o = "\\" + o;
+		}
+		if (o[o.size()-1] != PATHSEP[0]) {
+			o += PATHSEP;
+		}
+		return o;
 	}
 
 }

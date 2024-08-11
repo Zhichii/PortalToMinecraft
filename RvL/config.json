@@ -13,7 +13,7 @@
       {
          "userCapes" : [],
          "userId" : "4d696e6563726166744d696e65637261",
-         "userName" : "Player2",
+         "userName" : "Developer",
          "userSkin" : "",
          "userSkinId" : "",
          "userToken" : "${auth_access_token}",
@@ -27,9 +27,10 @@
       "H:\\Programming\\Javas\\JDK17-Win-x64\\bin\\javaw.exe",
       "H:\\Programming\\Javas\\JDK8-Win-x64\\bin\\javaw.exe"
    ],
-   "Language" : "auto",
+   "Language" : "zh-CN",
    "SelectedAccount" : 0,
-   "SelectedJava" : 0,
-   "WindowHeight" : null,
-   "WindowWidth" : null
+   "SelectedGameInstance" : -1,
+   "SelectedJava" : -1,
+   "WindowHeight" : 0,
+   "WindowWidth" : 0
 }
