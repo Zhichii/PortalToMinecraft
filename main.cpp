@@ -17,6 +17,7 @@
 #include <json/json_writer.cpp>
 #include <json/json_reader.cpp>
 #include <libpng/png.h>
+#include <mutex>
 #include <random>
 char logCacheStr[16384];
 char formatCacheStr[16384];
@@ -32,10 +33,15 @@ void writelog(std::string format, ...) {
 }
 
 FILE* tclScriptLog;
-std::map<std::string,std::string> types;
+typedef int ClrUpdFunc(std::vector<std::string>);
+std::map<std::string,ClrUpdFunc*> colorUpdates;
+std::map<std::string, std::vector<std::string>> clrUpdCd;
 std::string pageCur;
-const std::string bgColor="#333333";
-const std::string darkString;
+std::string primaryColor;
+std::string textColor;
+std::string secondaryColor;
+std::string hoverColor;
+std::string selectColor;
 
 Tcl_Interp* interp;
 std::string call(const std::vector<std::string> strs, bool nolog = 1) {
@@ -81,27 +87,34 @@ std::string call(const std::vector<std::string> strs, bool nolog = 1) {
 
 // [](ClientData clientData, Tcl_Interp* interp, int arg, const char* argv[])->int
 static void CreateCmd(std::string name, Tcl_CmdProc* proc, ClientData cd) {
-	types[name] = "cmd";
 	Tcl_CreateCommand(interp, name.c_str(), proc, cd, nullptr);
 }
 
 const std::string ROOT = ".";
 
-static void control(std::string name, std::string type, std::vector<std::string> arg = {}) {
+static void control(std::string name, std::string type, std::vector<std::string> arg = {}, bool nolog = 1) {
 	std::vector<std::string> x = { type, name };
 	for (const auto& i : arg) {
 		x.push_back(i);
 	}
-	types[name] = type;
-	call(x);
+	call(x, nolog);
 }
 
-static void MyButtonIconActive(std::string name, std::string textvariable = {}, std::string icon = {}, std::string commandId = {}, int width=0, std::string background="#202020") {
+static void MyButtonIconActive(std::string name, std::string textvariable = {}, std::string icon = {}, std::string commandId = {}, int width = 0, std::string background = primaryColor) {
 	control(name, "ttk::label");
 	call({ name,"config","-image",icon,"-compound",((textvariable!=""?"left":"center")),"-textvariable",textvariable,"-width",std::to_string(width),"-background",background});
 	call({ "bind",name,"<Button-1>",commandId });
-	call({ "bind",name,"<Enter>",name + " config -image "+icon+"Active"+((textvariable!="")?(" -background #484848"):"") });
-	call({ "bind",name,"<Leave>",name + " config -image "+icon+((textvariable!="")?(" -background "+bgColor):"") });
+	call({ "bind",name,"<Enter>",name + " config -image "+icon+"Active"+((textvariable!="")?(" -background "+hoverColor):"") });
+	call({ "bind",name,"<Leave>",name + " config -image "+icon+((textvariable!="")?(" -background "+primaryColor):"") });
+	colorUpdates[name] = [](std::vector<std::string> cd)->int {
+		std::string name = cd[0];
+		std::string icon = cd[1];
+		std::string tvar = cd[2];
+		call({ "bind",name,"<Enter>",name + " config -image "+icon+"Active"+((tvar!="")?(" -background "+hoverColor):"") });
+		call({ "bind",name,"<Leave>",name + " config -image "+icon+((tvar!="")?(" -background "+primaryColor):"") });
+		return 0;
+	};
+	clrUpdCd[name] = { name, icon, textvariable };
 }
 
 static void MyTab(std::string name, std::string textvariable = {}, std::string command = {}, std::string bg = "tabImage", std::string bgActive = "tabImageActive") {
@@ -139,14 +152,26 @@ int myplace(ClientData clientData, Tcl_Interp* interp, int argc, const char* arg
 
 static void MyScrollBar(std::string name, std::string command = {}) {
 	control(name, "frame");
-	types[name]="my::nofill";
 	control(name+".x", "frame");
-	call({ name,"config","-background","#1e1e1e","-width","20" });
-	call({ name+".x","config","-background",bgColor,"-width","14","-height","30"});
-	call({ "bind", name+".x","<Enter>", name+".x config -background "+"#484848" });
-	call({ "bind", name+".x","<Leave>", name+".x config -background "+bgColor });
+	call({ name,"config","-background",secondaryColor,"-width","20" });
+	call({ name+".x","config","-background",primaryColor,"-width","14","-height","30"});
+	call({ "bind", name+".x","<Enter>", name+".x config -background "+hoverColor });
+	call({ "bind", name+".x","<Leave>", name+".x config -background "+primaryColor });
 	call({ "place", name+".x", "-x","3", "-y","3" });
 	call({ "bind", name+".x","<B1-Motion>","myplace "+name+" "+name+".x %Y "+command });
+	colorUpdates[name] = [](std::vector<std::string> cd)->int {
+		std::string name = cd[0];
+		call({ name,"config","-background",secondaryColor,"-width","20" });
+		return 0;
+	};
+	colorUpdates[name+".x"] = [](std::vector<std::string> cd)->int {
+		std::string name = cd[0];
+		call({ "bind", name,"<Enter>", name+" config -background "+hoverColor });
+		call({ "bind", name,"<Leave>", name+" config -background "+primaryColor });
+		return 0;
+	};
+	clrUpdCd[name] = { name };
+	clrUpdCd[name+".x"] = { name+".x" };
 }
 
 static void MyTabY(std::string name, std::string textvariable = {}, std::string command = {}) {
@@ -299,13 +324,18 @@ struct MyList {
 		this->frameid = frameId;
 		this->scroll = scrollbarId;
 		this->selEnabled = selection;
-		types[frameId] = "frame";
 		CreateCmd(frameId+".yview", [](ClientData clientData, Tcl_Interp* interp, int arg, const char** argv)->int {
 			MyList* x = (MyList*)clientData;
 			x->yview(argv[1], atof(argv[2]));
 			return 0;
 			}, this);
-		call({ "frame",frameId,"-height",std::to_string(height),"-width",std::to_string(width),"-relief","raised" });
+		control(frameId, "frame", {"-height",std::to_string(height),"-width",std::to_string(width),"-relief","raised"});
+		colorUpdates[frameId] = [](std::vector<std::string> cd)->int {
+			MyList* self = (MyList*)std::atoll(cd[0].c_str());
+			self->colorUpdate();
+			return 0;
+		};
+		clrUpdCd[frameId] = { std::to_string((long long)this) };
 		CreateCmd(frameId+".mw", [](ClientData clientData,
 			Tcl_Interp* interp, int argc, const char* argv[])->int {
 				MyList* t = (MyList*)clientData;
@@ -329,11 +359,11 @@ struct MyList {
 				int item = std::atoi(argv[1]);
 				ItemRecord& ir = list->owned[item];
 				il(list->enabled) {
-					call({ ir.ctrlId+".image","config","-background","#484848" });
-					call({ ir.ctrlId+".text","config","-background","#484848" });
+					call({ ir.ctrlId+".image","config","-background",hoverColor });
+					call({ ir.ctrlId+".text","config","-background",hoverColor,"-foreground",textColor });
 					for (int i = 0; i < ir.commands.size(); i += 2) {
 						std::string t3 = ir.ctrlId+".button"+std::to_string(i/2);
-						call({ t3,"config","-image",ir.commands[i],"-background","#484848" });
+						call({ t3,"config","-image",ir.commands[i],"-background",hoverColor });
 					}
 				}
 				return 0;
@@ -354,19 +384,19 @@ struct MyList {
 			std::string t2 = t1 + ".image";
 			std::string t22 = t1 + ".text";
 			il(this->selEnabled && i==this->selection) {
-				call({ t2,"config","-background","#18572a" });
-				call({ t22,"config","-background","#18572a","-foreground","white" });
+				call({ t2,"config","-background",selectColor });
+				call({ t22,"config","-background",selectColor,"-foreground",textColor });
 				for (int j = 0; j < this->owned[i].commands.size(); j += 2) {
 					std::string t3 = t1+".button"+std::to_string(j/2);
-					call({ t3,"config","-image", "blankSelectedImage","-background","#18572a"});
+					call({ t3,"config","-image", "blankImage","-background",selectColor });
 				}
 			}
 			else {
-				call({ t2,"config","-background",bgColor });
-				call({ t22,"config","-background",bgColor,"-foreground","white" });
+				call({ t2,"config","-background",primaryColor });
+				call({ t22,"config","-background",primaryColor,"-foreground",textColor });
 				for (int j = 0; j < this->owned[i].commands.size(); j += 2) {
 					std::string t3 = t1+".button"+std::to_string(j/2);
-					call({ t3,"config","-image", "blankImage","-background",bgColor });
+					call({ t3,"config","-image", "blankImage","-background",primaryColor });
 				}
 			}
 		}
@@ -403,17 +433,15 @@ struct MyList {
 		ir.imageId = imageId;
 		ir.ctrlId = t1;
 		ir.commands = functions;
-		ir.color = bgColor;
+		ir.color = primaryColor;
 		this->owned.addEnd(ir);
-		types[t1] = "frame";
-		types[t2] = (imageId=="<canvas>")?"ttk::label":"ttk::canvas";
-		call({ "frame",t1,"-width",std::to_string(this->width),"-relief","raised" });
+		control(t1, "frame", {"-width",std::to_string(this->width),"-relief","raised"});
 		il(imageId != "") {
 			il(imageId != "<canvas>") {
 				control(t2, "ttk::label", { "-image",imageId,"-compound","center","-width","4" });
 			}
 			ol{
-				control(t2,"canvas",{"-height","44","-width","44","-highlightthickness","0","-background",bgColor});
+				control(t2,"canvas",{"-height","44","-width","44","-highlightthickness","0","-background",primaryColor});
 				call({ t2,"create","rect","2","2","42","42","-fill","#000000","-outline","" });
 			}
 			call({ "grid",t2,"-column","1","-row","1" });
@@ -428,9 +456,8 @@ struct MyList {
 		call({ "grid",t22,"-column","2","-row","1" });
 		for (int i = 0; i < functions.size(); i += 2) {
 			std::string t3 = t1 + ".button" + std::to_string(i/2);
-			types[t3] = "ttk::label";
-			MyButtonIconActive(t3, "", functions[i], functions[i+1], 0, bgColor);
-			call({ t3,"config","-image","blankImage","-background",bgColor });
+			MyButtonIconActive(t3, "", functions[i], functions[i+1], 0, primaryColor);
+			call({ t3,"config","-image","blankImage","-background",primaryColor });
 			call({ "bind",t3,"<MouseWheel>",this->frameid+".mw %D" });
 			call({ "grid",t3,"-column",std::to_string(i/2+3),"-row","1" });
 		}
@@ -493,11 +520,8 @@ struct MyList {
 			for (int i = 0; i < cur->value.commands.size(); i += 2) {
 				t3 = t1+".button"+std::to_string(i / 2);
 				call({ "destroy",t3 });
-				types[t3] = "";
 			}
 			call({ "destroy",t1 });
-			types[t2] = "";
-			types[t1] = "";
 			Tcl_DeleteCommand(interp, (t1+".mw").c_str());
 			Tcl_DeleteCommand(interp, (t2+".b1").c_str());
 			Tcl_DeleteCommand(interp, (t2+".enter").c_str());
@@ -520,7 +544,6 @@ struct MyList {
 		Tcl_DeleteCommand(interp, (this->frameid + ".yview").c_str());
 	}
 };
-
 
 std::vector<std::string> messageBoxes;
 size_t msgBxs=0;
@@ -549,7 +572,41 @@ int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 	return 0;
 }
 
-
+const int comeAniSz = 12;
+const int comeAnim[comeAniSz] = { -500,-400,-300,-200,-100,-50,-20,-5,3,5,3,0 };
+const int goAniSz = 13;
+const int goAnim[goAniSz] = { 0,-80,-150,-210,-255,-295,-340,-360,-390,-415,-440,-465,-500 };
+static std::mutex doingAnim;
+void swiPage(std::string page, bool noAnimation) {
+	if (page == pageCur) return;
+	if (!doingAnim.try_lock()) return;
+	std::string x,x2;
+	if (!noAnimation) {
+		x = call({ "winfo","x",pageCur });
+		call({ "pack",page }); call({ "update" });
+		x2 = call({ "winfo","x",page });
+		call({ "pack","forget",page }); call({ "update" });
+	}
+	call({ "pack","forget",pageCur }); call({ "update" });
+	if (!noAnimation) {
+		for (int i = 0; i < goAniSz; i ++) {
+			call({ "place",pageCur,"-x",x,"-y",std::to_string(goAnim[i]) });
+			call({ "update" });
+			Tcl_Sleep(5);
+		}
+		call({ "place","forget",pageCur });
+	}
+	pageCur = page;
+	if (!noAnimation) {
+		for (int i = 0; i < comeAniSz; i ++) {
+			call({ "place",pageCur,"-x",x2,"-y",std::to_string(comeAnim[i])});
+			call({ "update" });
+			Tcl_Sleep(5);
+		}
+	}
+	doingAnim.unlock();
+	call({ "pack",pageCur });
+}
 
 std::vector<std::string> listVersion() {
 	std::vector<std::string> versions;
@@ -674,25 +731,19 @@ int pageGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	}
 	versionList->yview("", 0);
 	if (argc == -1) return 0;
-	call({ "pack","forget",pageCur });
-	pageCur = ".pageGame";
-	call({ "pack",pageCur });
+	swiPage(".pageGame", argc == -2);
 	return 0;
 }
 
 int pageDown(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	if (argc == -1) return 0;
-	call({ "pack","forget",pageCur });
-	pageCur = ".pageDown";
-	call({ "pack",pageCur });
+	swiPage(".pageDown", argc == -2);
 	return 0;
 }
 
 int pageMods(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	if (argc == -1) return 0;
-	call({ "pack","forget",pageCur });
-	pageCur = ".pageMods";
-	call({ "pack",pageCur });
+	swiPage(".pageMods", argc == -2);
 	return 0;
 }
 
@@ -827,9 +878,7 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	accountList->select(rdata("SelectedAccount").asInt());
 	accountList->yview("", 0);
 	if (argc == -1) return 0;
-	call({ "pack","forget",pageCur });
-	pageCur = ".pageAcco";
-	call({ "pack",pageCur });
+	swiPage(".pageAcco", argc == -2);
 	return 0;
 }
 
@@ -837,11 +886,13 @@ int pageSett(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	std::thread thr([](){
 		//FolderDialog();
 		});
+	Tk_PhotoHandle ph = Tk_FindPhoto(interp, "tabImage");
+	Tk_PhotoImageBlock pib;
+	Tk_PhotoGetImage(ph, &pib);
+	Tk_PhotoPutBlock(interp, ph, &pib, 0, 0, 30, 10, TK_PHOTO_COMPOSITE_OVERLAY);
 	thr.detach();
 	if (argc == -1) return 0;
-	call({ "pack","forget",pageCur });
-	pageCur = ".pageSett";
-	call({ "pack",pageCur });
+	swiPage(".pageSett", argc == -2);
 	return 0;
 }
 
@@ -869,36 +920,29 @@ int pageLang(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	((MyList*)clientData)->update();
 	((MyList*)clientData)->yview("", 0);
 	if (argc == -1) return 0;
-	call({ "pack","forget",pageCur });
-	pageCur = ".pageLang";
-	call({ "pack",pageCur });
+	swiPage(".pageLang", argc == -2);
 	return 0;
 }
 
-void fillColor(std::string rt_, std::string color=bgColor) {
+void fillColor(std::string rt_) {
 	std::string rt = getRoot(rt_);
-	call({ rt,"config","-background",color });
-	call({ rt,"config","-foreground","white" });
+	call({ rt,"config","-background",primaryColor });
+	std::string x = call({ rt,"config","-image" });
+	std::string y = call({ rt,"config","-compound" });
+	il(x != "unknown option \"-image\"" && x != "-image image Image {} {}") {
+		il(Strings::count(y, "center") == 0) call({ rt,"config","-foreground",textColor });
+	} ol call({ rt,"config","-foreground",textColor });
+	il(Strings::count(y,"center")==0) call({ rt,"config","-foreground",textColor });
 	std::string a = call({ "winfo","children",rt });
+	if (a == "") return;
 	std::vector<std::string> children = Strings::split(a, " ");
-	for (const auto& i : children) {
-		il(types[i] == "my::nofill") continue;
-		il(types[i] == "frame")
-			fillColor(i);
-		el (types[i] == "ttk::entry")
-			continue;
-		ol {
-			call({ i,"config","-background",color });
-			std::string x = call({ i,"config","-image" });
-			x = Strings::slice(x, 22);
-			il(x != "") {
-				std::string y = call({ i,"config","-compound" });
-				il(Strings::count(y, "center")) {
-					continue;
-				}
-			}
-			call({ i,"config","-foreground","#ffffff" });
-		}
+	for (const auto& i : children) fillColor(i);
+}
+
+void colorUpdate() {
+	fillColor(ROOT);
+	for (const auto& i : colorUpdates) {
+		i.second(clrUpdCd[i.first]);
 	}
 }
 
@@ -943,9 +987,6 @@ int main() {
 	call({ "set","none","" });
 
 	writelog("Creating images. ");
-	// Controls v1. 
-	call({ "image","create","photo","buttonImage","-file","assets\\control\\button.png" });
-	call({ "image","create","photo","buttonImageActive","-file","assets\\control\\buttonActive.png" });
 	// Icons. 
 	call({ "image","create","photo","releaseImage","-file","assets\\icon\\release.png" });
 	call({ "image","create","photo","snapshotImage","-file","assets\\icon\\snapshot.png" });
@@ -953,30 +994,75 @@ int main() {
 	call({ "image","create","photo","fabricImage","-file","assets\\icon\\fabric.png" });
 	call({ "image","create","photo","optifineImage","-file","assets\\icon\\optifine.png" });
 	call({ "image","create","photo","titleImage","-file","assets\\icon.png" });
+	// Controls v1. 
+	call({ "image","create","photo","buttonImage","-file","assets\\control\\button.png" });
+	call({ "image","create","photo","buttonImageActive","-file","assets\\control\\buttonActive.png" });
 	// Controls. 
 	call({ "image","create","photo","tabImage","-file","assets\\ctrl\\tab.png" });
 	call({ "image","create","photo","tabImageActive","-file","assets\\ctrl\\tabActive.png" });
 	call({ "image","create","photo","tabYImage","-file","assets\\ctrl\\tabY.png" });
 	call({ "image","create","photo","tabYImageActive","-file","assets\\ctrl\\tabYActive.png" });
-	call({ "image","create","photo","launchImage","-file","assets\\ctrl\\launch.png" });
-	call({ "image","create","photo","launchImageActive","-file","assets\\ctrl\\launch_active.png" });
-	call({ "image","create","photo","editImage","-file","assets\\ctrl\\edit.png" });
-	call({ "image","create","photo","editImageActive","-file","assets\\ctrl\\edit_active.png" });
-	call({ "image","create","photo","addImage","-file","assets\\ctrl\\add.png" });
-	call({ "image","create","photo","addImageActive","-file","assets\\ctrl\\add_active.png" });
+	// Icon Buttons. 
+	call({ "image","create","photo","launchImage","-file","assets\\iconbutton\\launch.png" });
+	call({ "image","create","photo","launchImageActive","-file","assets\\iconbutton\\launch_active.png" });
+	call({ "image","create","photo","editImage","-file","assets\\iconbutton\\edit.png" });
+	call({ "image","create","photo","editImageActive","-file","assets\\iconbutton\\edit_active.png" });
+	call({ "image","create","photo","addImage","-file","assets\\iconbutton\\add.png" });
+	call({ "image","create","photo","addImageActive","-file","assets\\iconbutton\\add_active.png" });
+	call({ "image","create","photo","brightImage","-file","assets\\iconbutton\\bright.png" });
+	call({ "image","create","photo","brightImageActive","-file","assets\\iconbutton\\bright_active.png" });
+	call({ "image","create","photo","darkImage","-file","assets\\iconbutton\\dark.png" });
+	call({ "image","create","photo","darkImageActive","-file","assets\\iconbutton\\dark_active.png" });
 	// Misc. 
 	call({ "image","create","photo","blankImage","-file","assets\\misc\\blank.png" });
-	call({ "image","create","photo","blankSelectedImage","-file","assets\\misc\\blankSelected.png" });
 	call({ "image","create","photo","horizontalImage","-file","assets\\misc\\horizontal.png" });
-	call({ "image","create","photo","transparentImage","-file","assets\\misc\\blankTrans.png" });
 	call({ "image","create","photo","steveImage","-file","assets\\misc\\steve.png" });
 
 	call({ "wm","iconbitmap",getRoot(ROOT),"assets\\icon.ico" });
 	call({ "wm","geometry",getRoot(ROOT),"600x400+25+25" });
 	call({ "wm","title",getRoot(ROOT),currentLanguage->localize("title") });
 
+	primaryColor = "#1f1f1f";
+	secondaryColor = "#000000";
+	textColor = "#ffffff";
+	hoverColor = "#4c4c4c";
+	selectColor = "#353535";
+	CreateCmd("chTheme", [](ClientData clientData,
+		Tcl_Interp* interp, int argc, const char* argv[])->int {
+			il(primaryColor == "#e6e6e6") {
+				primaryColor = "#1f1f1f";
+				secondaryColor = "#000000";
+				textColor = "#ffffff";
+				hoverColor = "#4c4c4c";
+				selectColor = "#353535";
+			}
+			el(primaryColor == "#1f1f1f") {
+				primaryColor = "#e6e6e6";
+				secondaryColor = "#ffffff";
+				textColor = "#000000";
+				hoverColor = "#cfcfcf";
+				selectColor = "#b8b8b8";
+			}
+			colorUpdate();
+			std::string img = (primaryColor=="#e6e6e6")?"brightImage":"darkImage";
+			call({ "bind",".themeButton","<Enter>",".themeButton config -image "+img+"Active" });
+			call({ "bind",".themeButton","<Leave>",".themeButton config -image "+img });
+			call({ ".themeButton","config","-image",img+"Active" });
+			return 0;
+		}, 0);
+
 	writelog("Creating tabs. ");
 	control(".tabs", "frame", { "-width","40" });
+	control(".tabs.tabTitle", "ttk::label", { "-textvariable","title","-borderwidth","30","-image","titleImage","-compound","top" });
+	call({ "grid",".tabs.tabTitle" });
+	MyTab(".tabs.game", "item.game", "swiGame"); call({ "grid",".tabs.game" });
+	MyTab(".tabs.down", "item.down", "swiDown"); call({ "grid",".tabs.down" });
+	MyTab(".tabs.acco", "item.acco", "swiAcco"); call({ "grid",".tabs.acco" });
+	MyTab(".tabs.sett", "item.sett", "swiSett"); call({ "grid",".tabs.sett" });
+	MyTab(".tabs.mods", "item.mods", "swiMods"); call({ "grid",".tabs.mods" });
+	MyTab(".tabs.lang", "item.lang", "swiLang"); call({ "grid",".tabs.lang" });
+	call({ "pack",".tabs","-side","left","-anchor","n" });
+
 	control(".pageGame", "frame", { "-borderwidth","30" });
 	control(".pageDown", "frame", { "-borderwidth","30" });
 	control(".pageMDow", "frame", { "-borderwidth","30" });
@@ -986,16 +1072,6 @@ int main() {
 	control(".pageLang", "frame", { "-borderwidth","30" });
 	control(".pageFabr", "frame", { "-borderwidth","30" });
 	control(".pageOpti", "frame", { "-borderwidth","30" });
-	pageCur = ".pageGame";
-
-	control(".tabs.tabTitle", "ttk::label", { "-textvariable","title","-borderwidth","30","-image","titleImage","-compound","top" });
-	call({ "grid",".tabs.tabTitle" });
-	MyTab(".tabs.game", "item.game", "swiGame"); call({ "grid",".tabs.game" });
-	MyTab(".tabs.down", "item.down", "swiDown"); call({ "grid",".tabs.down" });
-	MyTab(".tabs.acco", "item.acco", "swiAcco"); call({ "grid",".tabs.acco" });
-	MyTab(".tabs.sett", "item.sett", "swiSett"); call({ "grid",".tabs.sett" });
-	MyTab(".tabs.mods", "item.mods", "swiMods"); call({ "grid",".tabs.mods" });
-	MyTab(".tabs.lang", "item.lang", "swiLang"); call({ "grid",".tabs.lang" });
 	control(".pageGame.title", "ttk::label", { "-textvariable","item.game" }); call({ "grid",".pageGame.title" });
 	control(".pageDown.title", "ttk::label", { "-textvariable","item.down" }); call({ "grid",".pageDown.title" });
 	control(".pageMDow.title", "ttk::label", { "-textvariable","item.down" }); call({ "grid",".pageMDow.title" });
@@ -1003,8 +1079,8 @@ int main() {
 	control(".pageSett.title", "ttk::label", { "-textvariable","item.sett" }); call({ "grid",".pageSett.title" });
 	control(".pageMods.title", "ttk::label", { "-textvariable","item.mods" }); call({ "grid",".pageMods.title" });
 	control(".pageLang.title", "ttk::label", { "-textvariable","item.lang" }); call({ "grid",".pageLang.title" });
-	call({ "pack",".tabs","-side","left","-anchor","n" });
-	
+	pageCur = ".pageGame";
+
 	CreateCmd("msgbx", messageBox, 0);
 	CreateCmd("myplace", myplace, 0);
 
@@ -1039,7 +1115,7 @@ int main() {
 	control(".pageSett.content.tabs", "frame");
 	control(".pageSett.content.pageGame", "frame");
 	control(".pageSett.content.pageGame.size", "frame");
-	control(".pageSett.content.pageGame.size.text", "ttk::label", {"-text","655","-image","horizontalImage","-compound","center","-foreground","white"});
+	control(".pageSett.content.pageGame.size.text", "ttk::label", {"-text","655","-image","horizontalImage","-compound","left","-foreground",textColor });
 	control(".pageSett.content.pageGame.java", "frame");
 	control(".pageSett.content.pageGame.memo", "frame");
 	control(".pageSett.content.pageGame.memv", "frame");
@@ -1086,7 +1162,6 @@ int main() {
 	call({ langList->get(1).ctrlId+".text","config","-textvariable","lang.empty"});
 
 	// Others. 
-
 	CreateCmd("swiGame", pageGame, gameList);
 	CreateCmd("swiDown", pageDown,        0);
 	CreateCmd("swiAcco", pageAcco, accoList);
@@ -1096,7 +1171,8 @@ int main() {
 	control(".sep","ttk::separator",{ "-orient","vertical" });
 	call({"pack",".sep","-side","left","-fill","y"});
 	call({ "pack",pageCur });
-	fillColor(getRoot(ROOT),bgColor);
+	MyButtonIconActive(".themeButton", "", "darkImage", "chTheme");
+	call({ "place",".themeButton","-x","-44","-y","0","-relx","1" });
 	std::string t = pageCur;
 	pageGame(gameList, interp, -1, nullptr);
 	pageDown(       0, interp, -1, nullptr);
@@ -1104,13 +1180,14 @@ int main() {
 	pageSett(       0, interp, -1, nullptr);
 	pageMods(       0, interp, -1, nullptr);
 	pageLang(langList, interp, -1, nullptr);
+	colorUpdate();
 	call({ "update" });
-	il(t==".pageGame") { pageGame(gameList, interp, 0, nullptr); }
-	il(t==".pageDown") { pageDown(       0, interp, 0, nullptr); }
-	il(t==".pageAcco") { pageAcco(accoList, interp, 0, nullptr); }
-	il(t==".pageSett") { pageSett(       0, interp, 0, nullptr); }
-	il(t==".pageMods") { pageMods(       0, interp, 0, nullptr); }
-	il(t==".pageLang") { pageLang(langList, interp, 0, nullptr); }
+	il(t==".pageGame") { pageGame(gameList, interp, -2, nullptr); }
+	il(t==".pageDown") { pageDown(       0, interp, -2, nullptr); }
+	il(t==".pageAcco") { pageAcco(accoList, interp, -2, nullptr); }
+	il(t==".pageSett") { pageSett(       0, interp, -2, nullptr); }
+	il(t==".pageMods") { pageMods(       0, interp, -2, nullptr); }
+	il(t==".pageLang") { pageLang(langList, interp, -2, nullptr); }
 	//
 	//// Start the mainloop. 
 	//while (1) {
@@ -1149,6 +1226,8 @@ int main() {
 	fclose(logFile);
 	fclose(tclScriptLog);
 	CoUninitialize();
+	Tcl_DeleteInterp(interp);
+	Tcl_Finalize();
 
 	return 0;
 }

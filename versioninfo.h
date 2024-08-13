@@ -53,7 +53,6 @@ public:
 			std::string getName() { return this->name; }
 			bool getValue() { return this->value; }
 		};
-	public:
 		Rule() {
 			this->a = true;
 			this->on = "";
@@ -75,21 +74,9 @@ public:
 			}
 		}
 		[[nodiscard]] bool isAllow(std::vector<Feature> features) {
-			bool allow;
-			il(this->a) {
-				il(this->on == SYS_NAME) {
-					allow = 1;
-				}
-				ol il(this->on == "") allow = 1;
-				ol allow = 0;
-			}
-			il(!this->a) {
-				il(this->on == SYS_NAME) {
-					allow = 0;
-				}
-				ol il(this->on == "") allow = 0;
-				ol allow = 1;
-			}
+			bool allow = 0;
+			il(this->on == SYS_NAME || this->on == "") allow = 1;
+			il(!this->a) allow = !allow;
 			for (auto& i : this->f) {
 				bool found = false;
 				bool v = false;
@@ -102,16 +89,16 @@ public:
 				}
 				//il(i.second) {
 				//	il(!found) allow &= 0;
-				//	ol il(v) allow &= 1;
+				//	el(v) allow &= 1;
 				//	ol allow &= 0;
 				//}
 				//ol {
 				//	il(!found) allow &= 1;
-				//	ol il(v) allow &= 0;
+				//	el(v) allow &= 0;
 				//	ol allow &= 1;
 				//}
 				il(!found) allow &= !i.second;
-				ol il(v) allow &= i.second;
+				el(v) allow &= i.second;
 				ol allow &= !i.second;
 			}
 			return allow;
@@ -143,9 +130,8 @@ public:
 				}
 			}
 			il(json.isMember("rules")) {
-				size_t rs = json["rules"].size();
-				for (size_t i = 0; i < rs; i++) {
-					r.push_back(json["rules"][(int)i]);
+				for (const auto& i : json["rules"]) {
+					this->r.push_back(i);
 				}
 			}
 		}
@@ -181,21 +167,21 @@ public:
 				libPath = Strings::strFormat("libraries\\%s", this->a.path().c_str());
 				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
-			ol il(this->nn.size() > 0) {
+			el(this->nn.size() > 0) {
 				libPath = Strings::strFormat("libraries\\%s", this->cn[this->nn[SYS_NAME]].path().c_str());
 				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
-			ol {
-				std::vector<std::string> libNameSplit;
-				libNameSplit = Strings::split(this->n, ":");
-				libNameSplit.emplace(libNameSplit.begin() + 2);
-				std::string libName = Strings::join(libNameSplit, ":");
-				
-				libNameSplit = Strings::split(this->n, ":");
-				libPath = libNameSplit[0];
-				for (char& i : libPath) il(i == '.') i = PATHSEP[0];
-				libNameSplit[0] = libPath;
-				libPath = Strings::join(libNameSplit, PATHSEP);
+			ol{
+				std::vector<std::string> libNameSplit = Strings::split(this->n,":");
+				libPath = this->n;
+				bool f = 1;
+				for (char& i : libPath) {
+					il(f && i=='.') i = PATHSEP[0];
+					il(i==':') {
+						f = 0;
+						i = PATHSEP[0];
+					}
+				}
 				libPath = Strings::strFormat("libraries\\%s\\%s-%s.jar",
 					libPath.c_str(), libNameSplit[1].c_str(), libNameSplit[2].c_str());
 				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
