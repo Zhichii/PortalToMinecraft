@@ -1,12 +1,17 @@
 许可协议
 License
 
-本软件使用了如下程序库。在此感谢！
-This software has used the libraries below. Thanks!  
-1. Tcl/Tk from https://tcl.tk 。
-2. fpng.cpp from https://github.com/richgel999/fpng 。
-3. JsonCpp from https://github.com/open-source-parsers/jsoncpp 。
-4. C++ 标准库（C++ Standard Library）由MSVC实现（Implement by MSVC）。
+本软件使用了如下程序库和字体。在此感谢！
+This software has used libraries and a font below. Thanks!  
+1. Tcl/Tk
+	https://tcl.tk
+2. libpng
+	https://libpng.sourceforge.io/index.html
+3. JsonCpp
+	https://github.com/open-source-parsers/jsoncpp
+4. Source Han Sans
+	https://github.com/adobe-fonts/source-han-sans
+5. C++ 标准库，由MSVC实现（C++ Standard Library implemented by MSVC）。
 
 在标明原作者为我的前提下，任何人都可以使用、复制、修改和分发本软件，但是不能以此盈利。
 Everyone can use, copy, modify and distribute this software if declare that the origin author is me, but no making money from this. 

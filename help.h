@@ -36,7 +36,7 @@ bool isExists(const std::string& pathName) {
 			return true;
 	#endif
 	//DebugBreak();
-	writelog("File [%s] doesn't exists. ", pathName.c_str());
+	writeLog("File [%s] doesn't exists. ", pathName.c_str());
 	return false;
 }
 bool isExists(const std::wstring& pathName) {
@@ -49,7 +49,7 @@ bool isExists(const std::wstring& pathName) {
 	if (wstat(pathName.c_str(), &st) == 0)
 		return true;
 #endif
-	writelog("File w[%s] doesn't exists. ", Strings::ws2s(pathName).c_str());
+	writeLog("File w[%s] doesn't exists. ", Strings::ws2s(pathName).c_str());
 	return false;
 }
 

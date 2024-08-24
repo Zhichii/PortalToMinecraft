@@ -1,17 +1,20 @@
 #define STATIC_BUILD
 #define TCL_USE_STATIC_PACKAGES
 #define CPP_TKINTER_SAFE_FUNCTIONS
+#define CURL_STATICLIB
 #define TCL_THREADS
 #define il if
 #define el else if
 #define ol else
 #include <tcl.h>
-#include <tk.h>
+#include <dwmapi.h>
 #include <direct.h>
 #include <vector>
 #include <string>
 #include <filesystem>
 #include <windows.h>
+#include <tk.h>
+#include <tkPlatDecls.h>
 #include <json/json.h>
 #include <json/json_value.cpp>
 #include <json/json_writer.cpp>
@@ -19,57 +22,18 @@
 #include <libpng/png.h>
 #include <mutex>
 #include <random>
-char logCacheStr[16384];
-char formatCacheStr[16384];
-wchar_t formatCacheStrW[16384];
+#include <curl/curl.h>
+
 FILE* logFile;
-void writelog(std::string format, ...) {
+void writeLog(std::string format, ...) {
 	va_list args;
 	va_start(args, format);
-	_vsprintf_s_l(logCacheStr, 16384, format.c_str(), NULL, args);
-	fprintf_s(logFile, "%s\n", logCacheStr);
+	char* temp = new char[16384];
+	_vsprintf_s_l(temp, 16384, format.c_str(), NULL, args);
+	fprintf_s(logFile, "%s\n", temp);
+	delete[] temp;
 	fflush(logFile);
 	va_end(args);
-}
-
-FILE* tclScriptLog;
-typedef int ClrUpdFunc(std::vector<std::string>);
-std::map<std::string,ClrUpdFunc*> colorUpdates;
-std::map<std::string, std::vector<std::string>> clrUpdCd;
-std::string pageCur;
-std::string primaryColor;
-std::string textColor;
-std::string secondaryColor;
-std::string hoverColor;
-std::string selectColor;
-
-Tcl_Interp* interp;
-std::string call(const std::vector<std::string> strs, bool nolog = 1) {
-	Tcl_Obj** objs = (Tcl_Obj**)Tcl_Alloc(strs.size() * sizeof(Tcl_Obj*));
-	il(!nolog) {
-		fprintf(tclScriptLog, "> ");
-		for (int i = 0; i < strs.size(); i++) {
-			fprintf(tclScriptLog, "%s ", strs[i].c_str());
-		}
-		fprintf(tclScriptLog, "\n");
-	}
-	for (int i = 0; i < strs.size(); i++) {
-		objs[i] = Tcl_NewStringObj(strs[i].c_str(), strs[i].size());
-		Tcl_IncrRefCount(objs[i]);
-	}
-	il(interp == nullptr) writelog("[interp] is null. ");
-	Tcl_EvalObjv(interp, strs.size(), objs, 0);
-	const char* result = Tcl_GetStringResult(interp);
-	std::string r = result;
-	for (int i = 0; i < strs.size(); i++) {
-		Tcl_DecrRefCount(objs[i]);
-	}
-	Tcl_Free((char*)objs);
-	il(!nolog) {
-		il(r != "") fprintf(tclScriptLog, "%s\n", r.c_str());
-		fflush(tclScriptLog);
-	}
-	return r;
 }
 
 #define PATHSEP "\\"
@@ -82,530 +46,100 @@ std::string call(const std::vector<std::string> strs, bool nolog = 1) {
 #include "help.h"
 #include "strings.h"
 #include "data.h"
-#include "versioninfo.h"
 #include "language.h"
+#include "control.h"
+#include "versioninfo.h"
+#include "net.h"
+#include "thread.h"
 
-// [](ClientData clientData, Tcl_Interp* interp, int arg, const char* argv[])->int
-static void CreateCmd(std::string name, Tcl_CmdProc* proc, ClientData cd) {
-	Tcl_CreateCommand(interp, name.c_str(), proc, cd, nullptr);
-}
-
-const std::string ROOT = ".";
-
-static void control(std::string name, std::string type, std::vector<std::string> arg = {}, bool nolog = 1) {
-	std::vector<std::string> x = { type, name };
-	for (const auto& i : arg) {
-		x.push_back(i);
+int readPNG(png_bytep png_file_data, size_t file_size, png_uint_32& width, png_uint_32& height, png_uint_32& bytesPerRow, png_bytepp output) {
+	png_bytep stream = png_file_data;
+	bool notpng = png_sig_cmp(png_file_data, 0, file_size);
+	if (notpng) {
+		return 1;
 	}
-	call(x, nolog);
-}
-
-static void MyButtonIconActive(std::string name, std::string textvariable = {}, std::string icon = {}, std::string commandId = {}, int width = 0, std::string background = primaryColor) {
-	control(name, "ttk::label");
-	call({ name,"config","-image",icon,"-compound",((textvariable!=""?"left":"center")),"-textvariable",textvariable,"-width",std::to_string(width),"-background",background});
-	call({ "bind",name,"<Button-1>",commandId });
-	call({ "bind",name,"<Enter>",name + " config -image "+icon+"Active"+((textvariable!="")?(" -background "+hoverColor):"") });
-	call({ "bind",name,"<Leave>",name + " config -image "+icon+((textvariable!="")?(" -background "+primaryColor):"") });
-	colorUpdates[name] = [](std::vector<std::string> cd)->int {
-		std::string name = cd[0];
-		std::string icon = cd[1];
-		std::string tvar = cd[2];
-		call({ "bind",name,"<Enter>",name + " config -image "+icon+"Active"+((tvar!="")?(" -background "+hoverColor):"") });
-		call({ "bind",name,"<Leave>",name + " config -image "+icon+((tvar!="")?(" -background "+primaryColor):"") });
-		return 0;
-	};
-	clrUpdCd[name] = { name, icon, textvariable };
-}
-
-static void MyTab(std::string name, std::string textvariable = {}, std::string command = {}, std::string bg = "tabImage", std::string bgActive = "tabImageActive") {
-	control(name, "ttk::label");
-	call({ name,"config","-textvariable",textvariable });
-	call({ name,"config","-image",bg,"-compound","center","-foreground","white" });
-	call({ "bind",name,"<Button-1>",command});
-	call({ "bind",name,"<Enter>",name+" config -image "+bgActive });
-	call({ "bind",name,"<Leave>",name+" config -image "+bg });
-}
-
-struct ScrollBarInfo {
-	std::string name;
-	std::string parent;
-	std::string command;
-	int height;
-};
-
-std::vector<ScrollBarInfo> scrollInfos;
-
-int myplace(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
-	const char* parent = argv[1];
-	const char* name = argv[2];
-	int y = atoi(argv[3]);
-	int n = atoi(call({ "winfo","rooty",parent }).c_str());
-	int h = atoi(call({ "winfo","height",parent }).c_str());
-	int sh = atoi(call({ "winfo","height",name }).c_str());
-	int x = y-n;
-	if (x < 3) x = 3;
-	if (x > h-sh-3) x = h-sh-3;
-	call({ "place",name,"-y",std::to_string(x) });
-	call({ argv[4],"moveto",std::to_string(x*1.f/h )});
-	return 0;
-}
-
-static void MyScrollBar(std::string name, std::string command = {}) {
-	control(name, "frame");
-	control(name+".x", "frame");
-	call({ name,"config","-background",secondaryColor,"-width","20" });
-	call({ name+".x","config","-background",primaryColor,"-width","14","-height","30"});
-	call({ "bind", name+".x","<Enter>", name+".x config -background "+hoverColor });
-	call({ "bind", name+".x","<Leave>", name+".x config -background "+primaryColor });
-	call({ "place", name+".x", "-x","3", "-y","3" });
-	call({ "bind", name+".x","<B1-Motion>","myplace "+name+" "+name+".x %Y "+command });
-	colorUpdates[name] = [](std::vector<std::string> cd)->int {
-		std::string name = cd[0];
-		call({ name,"config","-background",secondaryColor,"-width","20" });
-		return 0;
-	};
-	colorUpdates[name+".x"] = [](std::vector<std::string> cd)->int {
-		std::string name = cd[0];
-		call({ "bind", name,"<Enter>", name+" config -background "+hoverColor });
-		call({ "bind", name,"<Leave>", name+" config -background "+primaryColor });
-		return 0;
-	};
-	clrUpdCd[name] = { name };
-	clrUpdCd[name+".x"] = { name+".x" };
-}
-
-static void MyTabY(std::string name, std::string textvariable = {}, std::string command = {}) {
-	control(name, "ttk::label");
-	call({ name,"config","-textvariable",textvariable });
-	call({ name,"config","-image","tabImageY","-compound","center","-foreground","white" });
-	call({ "bind",name,"<Button-1>",command });
-	call({ "bind",name,"<Enter>",name + " config -image tabImageYActive" });
-	call({ "bind",name,"<Leave>",name + " config -image tabImageY" });
-}
-
-char toHex(int a) {
-	il(a>=0xa) return a-0xa+'a';
-	ol return a+'0';
-}
-int toNum(char a) {
-	il(a>='a'&&a<='f') return a-'a'+0xa;
-	el(a>='A'&&a<='F') return a-'A'+0xa;
-	ol return a-'0';
-}
-
-template <class T>
-struct LinkList {
-	template <class U>
-	struct Node {
-		Node<U>* prev = nullptr;
-		U value;
-		Node<U>* next = nullptr;
-		Node() {
-			this->prev = nullptr;
-			this->next = nullptr;
-		}
-	};
-	Node<T>* head = nullptr;
-	Node<T>* tail = nullptr;
-	size_t sz = 0;
-	size_t size() { return sz; }
-	LinkList() {
-		head = nullptr;
-		this->sz = 0;
-		tail = nullptr;
+	png_structp png_ptr = png_create_read_struct(
+		PNG_LIBPNG_VER_STRING, 
+		(png_voidp)NULL, NULL, NULL);
+	if (!png_ptr) {
+		return 2;
 	}
-	void addEnd(T val) {
-		il(this->head == nullptr) {
-			this->head = new Node<T>();
-			this->head->prev = nullptr;
-			this->head->value = val;
-			this->head->next = nullptr;
-			this->tail = this->head;
-		}
-		else {
-			this->tail->next = new Node<T>();
-			this->tail->next->prev = this->tail;
-			this->tail->next->value = val;
-			this->tail->next->next = nullptr;
-			this->tail = this->tail->next;
-		}
-		this->sz++;
+	png_infop info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr) {
+		png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
+		return 3;
 	}
-	void delEnd() {
-		il(this->tail == nullptr || this->head == nullptr) {
-			this->head = nullptr;
-			this->tail = nullptr;
+	png_set_read_fn(png_ptr, &stream, [](png_structp png_ptr, png_bytep output, size_t sz) {
+		png_byte** io_ptr = (png_byte**)png_get_io_ptr(png_ptr);
+		if (io_ptr == NULL)
 			return;
-		}
-		il(this->head == this->tail) {
-			this->~LinkList();
-		}
-		else {
-			this->tail = this->tail->prev;
-			delete this->tail->next;
-			this->tail->next = nullptr;
-		}
+		memcpy(output, *io_ptr, sz);
+		(*io_ptr) += sz;
+	});
+	png_read_info(png_ptr, info_ptr);
+	int bit_depth = 0;
+	int color_type = -1;
+	png_uint_32 retval = png_get_IHDR(png_ptr, info_ptr,
+		&width,
+		&height,
+		&bit_depth,
+		&color_type,
+		NULL, NULL, NULL);
+	if (retval != 1) {
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		return 4;
 	}
-	void reverse() {
-		Node<T>* curI = this->head;
-		this->head = this->tail;
-		this->tail = curI;
-		while (curI != nullptr) {
-			Node<T>* t = curI->prev;
-			curI->prev = curI->next;
-			curI->next = t;
-			curI = curI->prev;
-		}
+	if (color_type == PNG_COLOR_TYPE_PALETTE)
+		png_set_palette_to_rgb(png_ptr);
+	if (png_get_valid(png_ptr, info_ptr,
+		PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png_ptr);
+	png_read_update_info(png_ptr, info_ptr);
+	bytesPerRow = png_get_rowbytes(png_ptr, info_ptr);
+	(*output) = new png_byte[bytesPerRow * height];
+	for (int i = 0; i < height; i++) {
+		png_read_row(png_ptr, (*output)+bytesPerRow*i, NULL);
 	}
-	static void swap(Node<T>* a, Node<T>* b) {
-		il(a->prev != nullptr)  a->prev->next = b;
-		il(a->next != nullptr)  a->next->prev = b;
-		il(b->prev != nullptr)  b->prev->next = a;
-		il(b->next != nullptr)  b->next->prev = a;
-		auto aP = a->prev, aN = a->next;
-		a->prev = b->prev; a->next = b->next;
-		b->prev = aP;      b->next = aN;
-		il(this->head == a) this->head = b;
-		el (this->head == b) this->head = a;
-		il(this->tail == a) this->tail = b;
-		el (this->tail == b) this->tail = a;
-	}
-	~LinkList() {
-		Node<T>* cur = this->head;
-		while (cur != nullptr) {
-			Node<T>* t = cur->next;
-			cur->prev = nullptr;
-			cur->next = nullptr;
-			delete cur;
-			cur = t;
-		}
-		this->head = nullptr;
-		this->sz = 0;
-		this->tail = nullptr;
-	}
-	[[nodiscard]] T& operator [](size_t index) {
-		Node<T>* cur = head;
-		for (size_t i = 0; i < index; i++) {
-			cur = cur->next;
-		}
-		return cur->value;
-	}
-};
-
-struct MyList {
-	const static int fieldOfView=6;
-	int offset;
-	int selection;
-	bool enabled;
-	bool selEnabled;
-	bool lock = false;
-	int width;
-	int height;
-	std::string frameid;
-	struct ItemRecord {
-		std::string text;
-		std::string imageId;
-		std::string ctrlId;
-		MyList* self;
-		bool* enabled;
-		int order;
-		std::vector<std::string> commands;
-		std::string color;
-	};
-	LinkList<ItemRecord> owned;
-	std::string scroll;
-	MyList(std::string frameId, std::string scrollbarId="", bool selection=true, int height = 40, int width = 40) {
-		this->offset = 0;
-		this->selection = 0;
-		this->enabled = true;
-		this->height = height;
-		this->width = width;
-		this->owned = {};
-		this->frameid = frameId;
-		this->scroll = scrollbarId;
-		this->selEnabled = selection;
-		CreateCmd(frameId+".yview", [](ClientData clientData, Tcl_Interp* interp, int arg, const char** argv)->int {
-			MyList* x = (MyList*)clientData;
-			x->yview(argv[1], atof(argv[2]));
-			return 0;
-			}, this);
-		control(frameId, "frame", {"-height",std::to_string(height),"-width",std::to_string(width),"-relief","raised"});
-		colorUpdates[frameId] = [](std::vector<std::string> cd)->int {
-			MyList* self = (MyList*)std::atoll(cd[0].c_str());
-			self->colorUpdate();
-			return 0;
-		};
-		clrUpdCd[frameId] = { std::to_string((long long)this) };
-		CreateCmd(frameId+".mw", [](ClientData clientData,
-			Tcl_Interp* interp, int argc, const char* argv[])->int {
-				MyList* t = (MyList*)clientData;
-				int delta = atoi(argv[1]);
-				t->yview("scroll", ((delta<0)*2-1)*3);
-				return 0;
-		}, this);
-		CreateCmd(frameId+".b1", [](ClientData clientData,
-			Tcl_Interp* interp, int argc, const char* argv[])->int {
-				MyList* list = (MyList*)clientData;
-				int item = std::atoi(argv[1]);
-				ItemRecord& ir = list->owned[item];
-				il(list->enabled) {
-					list->userSelect(ir.order);
-				}
-				return 0;
-		}, this);
-		CreateCmd(frameId+".enter", [](ClientData clientData,
-			Tcl_Interp* interp, int argc, const char* argv[])->int {
-				MyList* list = (MyList*)clientData;
-				int item = std::atoi(argv[1]);
-				ItemRecord& ir = list->owned[item];
-				il(list->enabled) {
-					call({ ir.ctrlId+".image","config","-background",hoverColor });
-					call({ ir.ctrlId+".text","config","-background",hoverColor,"-foreground",textColor });
-					for (int i = 0; i < ir.commands.size(); i += 2) {
-						std::string t3 = ir.ctrlId+".button"+std::to_string(i/2);
-						call({ t3,"config","-image",ir.commands[i],"-background",hoverColor });
-					}
-				}
-				return 0;
-		}, this);
-		CreateCmd(frameId+".leave", [](ClientData clientData,
-			Tcl_Interp* interp, int argc, const char* argv[])->int {
-				MyList* list = (MyList*)clientData;
-				il(list->enabled) {
-					list->colorUpdate();
-				}
-				return 0;
-		}, this);
-	}
-	void colorUpdate() {
-		il(this->offset < 0) this->offset = 0;
-		for (int i = 0; i < this->owned.size(); i++) {
-			std::string t1 = this->owned[i].ctrlId;
-			std::string t2 = t1 + ".image";
-			std::string t22 = t1 + ".text";
-			il(this->selEnabled && i==this->selection) {
-				call({ t2,"config","-background",selectColor });
-				call({ t22,"config","-background",selectColor,"-foreground",textColor });
-				for (int j = 0; j < this->owned[i].commands.size(); j += 2) {
-					std::string t3 = t1+".button"+std::to_string(j/2);
-					call({ t3,"config","-image", "blankImage","-background",selectColor });
-				}
-			}
-			else {
-				call({ t2,"config","-background",primaryColor });
-				call({ t22,"config","-background",primaryColor,"-foreground",textColor });
-				for (int j = 0; j < this->owned[i].commands.size(); j += 2) {
-					std::string t3 = t1+".button"+std::to_string(j/2);
-					call({ t3,"config","-image", "blankImage","-background",primaryColor });
-				}
-			}
-		}
-	}
-	void update() {
-		colorUpdate();
-		for (int j = 0; j < this->owned.size(); j ++) {
-			il(j >= this->offset && j < this->offset + this->fieldOfView) {
-				call({ "grid",this->owned[j].ctrlId,"-row",std::to_string(j) });
-			} else {
-				call({ "grid","forget",this->owned[j].ctrlId });
-			}
-		}
-	}
-	void userSelect(int item) {
-		this->selection = item;
-		il(selEnabled) this->colorUpdate();
-		call({ this->frameid+".enter", std::to_string(this->owned[item].order) });
-	}
-	void select(int item) {
-		this->selection = item;
-		il(selEnabled) this->colorUpdate();
-	}
-	void add(std::string text, std::string imageId = {}, std::vector<std::string> functions = {}) {
-		this->selection = 0;
-		std::string t1 = this->frameid+"."+std::to_string(this->owned.size());
-		std::string t2 = t1+".image";
-		std::string t22 = t1+".text";
-		ItemRecord ir;
-		ir.self = this;
-		ir.enabled = &(this->enabled);
-		ir.order = this->owned.size();
-		ir.text = text;
-		ir.imageId = imageId;
-		ir.ctrlId = t1;
-		ir.commands = functions;
-		ir.color = primaryColor;
-		this->owned.addEnd(ir);
-		control(t1, "frame", {"-width",std::to_string(this->width),"-relief","raised"});
-		il(imageId != "") {
-			il(imageId != "<canvas>") {
-				control(t2, "ttk::label", { "-image",imageId,"-compound","center","-width","4" });
-			}
-			ol{
-				control(t2,"canvas",{"-height","44","-width","44","-highlightthickness","0","-background",primaryColor});
-				call({ t2,"create","rect","2","2","42","42","-fill","#000000","-outline","" });
-			}
-			call({ "grid",t2,"-column","1","-row","1" });
-			call({ "bind",t2,"<MouseWheel>", this->frameid + ".mw %D" });
-			call({ "bind",t2,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
-		}
-		control(t22,"ttk::label",{"-image","horizontalImage","-compound","left","-text",text,"-width",std::to_string(this->width-(4*functions.size())-6*(imageId!=""))});
-		call({ "bind",t22,"<MouseWheel>",this->frameid+".mw %D" });
-		call({ "bind",t22,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
-		call({ "bind",t1,"<Enter>",		 this->frameid+".enter "+std::to_string(ir.order) });
-		call({ "bind",t1,"<Leave>",		 this->frameid+".leave "+std::to_string(ir.order) });
-		call({ "grid",t22,"-column","2","-row","1" });
-		for (int i = 0; i < functions.size(); i += 2) {
-			std::string t3 = t1 + ".button" + std::to_string(i/2);
-			MyButtonIconActive(t3, "", functions[i], functions[i+1], 0, primaryColor);
-			call({ t3,"config","-image","blankImage","-background",primaryColor });
-			call({ "bind",t3,"<MouseWheel>",this->frameid+".mw %D" });
-			call({ "grid",t3,"-column",std::to_string(i/2+3),"-row","1" });
-		}
-		this->update();
-	}
-	void bind(int index, std::string seq, std::string cmdId) {
-		il(index < 0 || index >= this->owned.size()) return;
-		call({ "bind",this->frameid+"."+std::to_string(index)+".text",seq,cmdId});
-		il(seq != "<Button-1>" &&
-			seq != "<Enter>" &&
-			seq != "<Leave>") return;
-	}
-	void yview(std::string cmd, double offs) {
-		il(cmd == "scroll") {
-			this->offset += (int)offs;
-		}
-		il(cmd == "moveto") {
-			this->offset = this->owned.size() - this->fieldOfView;
-			il(offs * (this->owned.size()) < (this->owned.size() - this->fieldOfView)) {
-				this->offset = offs * (this->owned.size());
-			}
-		}
-		il(this->offset > ((long long)this->owned.size() - this->fieldOfView)) {
-			this->offset = this->owned.size() - this->fieldOfView;
-		}
-		il(this->offset < 0) this->offset = 0;
-		this->update();
-		int h = atoi(call({ "winfo","height",this->scroll }).c_str())-6;
-		il(h < 0) h = 0;
-		il(this->scroll == "") return;
-		int pos = 0;
-		int siz = h;
-		il(this->owned.size() != 0) {
-			pos = (this->offset * h) / this->owned.size();
-			siz = (this->fieldOfView * h) / this->owned.size();
-		}
-		il(pos < 0) pos = 0;
-		il(pos + siz > h) siz = h - pos;
-		call({ "place",this->scroll+".x","-y",std::to_string(pos + 3) });
-		call({ this->scroll+".x","config","-height",std::to_string(siz) });
-	}
-	int index() { return this->selection; }
-	ItemRecord get(int ind = -1) {
-		il(ind == -1) ind = this->index();
-		return this->owned[ind];
-	}
-	void able(bool state=true) {
-		this->enabled = state;
-	}
-	void clear() {
-		LinkList<ItemRecord>::Node<ItemRecord>* cur = this->owned.head;
-		size_t i = 1;
-		while(cur!=nullptr) {
-			std::string t1 = this->frameid + "." + std::to_string(i);
-			std::string t2 = t1 + ".image";
-			std::string t22 = t1 + ".text";
-			std::string t3;
-			call({ "destroy",t22 });
-			call({ "destroy",t2 });
-			for (int i = 0; i < cur->value.commands.size(); i += 2) {
-				t3 = t1+".button"+std::to_string(i / 2);
-				call({ "destroy",t3 });
-			}
-			call({ "destroy",t1 });
-			Tcl_DeleteCommand(interp, (t1+".mw").c_str());
-			Tcl_DeleteCommand(interp, (t2+".b1").c_str());
-			Tcl_DeleteCommand(interp, (t2+".enter").c_str());
-			Tcl_DeleteCommand(interp, (t2+".leave").c_str());
-			i++;
-			auto t = cur->next;
-			delete cur;
-			cur = t;
-		}
-		this->owned.head = nullptr;
-		this->owned.sz = 0;
-		this->owned.tail = nullptr;
-	}
-	~MyList() {
-		owned.~LinkList();
-		Tcl_DeleteCommand(interp, (this->frameid + ".mw").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".n1").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".enter").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".leave").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".yview").c_str());
-	}
-};
-
-std::vector<std::string> messageBoxes;
-size_t msgBxs=0;
-
-std::string getRoot(std::string rt) {
-	return rt == "" ? "." : rt;
-}
-
-int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
-	msgBxs++;
-	std::string name = ".window" + std::to_string(msgBxs);
-	messageBoxes.push_back(name);
-	call({ "toplevel",name });
-	std::string title = argv[1];
-	std::string content = argv[2];
-	std::string level = argv[3];
-	call({ "wm","title",name,currentLanguage->localize(title) });
-	if (content != "<text>")
-		control(name + ".text", "ttk::label", { "-text",currentLanguage->localize(content) });
-	else
-		control(name + ".text", "ttk::label", { "-text",argv[4] });
-	control(name + ".ok", "ttk::button", { "-text",currentLanguage->localize("ok") });
-	call({ name + ".ok","config","-command","destroy " + name });
-	call({ "grid",name + ".text" });
-	call({ "grid",name + ".ok" });
+	png_read_end(png_ptr, NULL);
+	png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
 	return 0;
 }
 
-const int comeAniSz = 12;
-const int comeAnim[comeAniSz] = { -500,-400,-300,-200,-100,-50,-20,-5,3,5,3,0 };
-const int goAniSz = 13;
-const int goAnim[goAniSz] = { 0,-80,-150,-210,-255,-295,-340,-360,-390,-415,-440,-465,-500 };
+const std::string contentPaddingStr = "80 0";
+const int comeAniSz = 11;
+const char* comeAnim[comeAniSz] = { "-680","-560","-320","-200","-40","60","110","130","110","95","80" };
+const int goAniSz = 12;
+const char* goAnim[goAniSz] = { "80","110","170","95","85","65","60","-40","-200","-320","-560","-680" };
+const int animStepWait = 1;
 static std::mutex doingAnim;
 void swiPage(std::string page, bool noAnimation) {
-	if (page == pageCur) return;
+	if (page==pageCur) return;
 	if (!doingAnim.try_lock()) return;
 	std::string x,x2;
-	if (!noAnimation) {
-		x = call({ "winfo","x",pageCur });
-		call({ "pack",page }); call({ "update" });
-		x2 = call({ "winfo","x",page });
-		call({ "pack","forget",page }); call({ "update" });
-	}
-	call({ "pack","forget",pageCur }); call({ "update" });
+	x = call({ "winfo","x",pageCur });
+	call({ "pack",page }); call({ "update" });
+	x2 = call({ "winfo","x",page });
+	call({ "pack","forget",page }); call({ "update" });
 	if (!noAnimation) {
 		for (int i = 0; i < goAniSz; i ++) {
-			call({ "place",pageCur,"-x",x,"-y",std::to_string(goAnim[i]) });
+			call({ "place",pageCur,"-x",x,"-y",goAnim[i] });
 			call({ "update" });
-			Tcl_Sleep(5);
+			Tcl_Sleep(animStepWait);
 		}
-		call({ "place","forget",pageCur });
+		Tcl_Sleep(125);
 	}
+	call({ "place","forget",pageCur });
+	call({ "update" });
 	pageCur = page;
 	if (!noAnimation) {
 		for (int i = 0; i < comeAniSz; i ++) {
-			call({ "place",pageCur,"-x",x2,"-y",std::to_string(comeAnim[i])});
+			call({ "place",pageCur,"-x",x2,"-y",comeAnim[i] });
 			call({ "update" });
-			Tcl_Sleep(5);
+			Tcl_Sleep(animStepWait);
 		}
 	}
+	call({ "place","forget",pageCur });
+	call({ "pack",pageCur,"-pady",contentPaddingStr });
 	doingAnim.unlock();
-	call({ "pack",pageCur });
 }
 
 std::vector<std::string> listVersion() {
@@ -617,7 +151,7 @@ std::vector<std::string> listVersion() {
 			std::wstring fileName = v.path().filename().wstring();
 			std::wstring jsonPath = Strings::s2ws(versionDir) + LPATHSEP + fileName + LPATHSEP + fileName + L".json";
 			il(!isExists(jsonPath)) {
-				writelog("Listing versions: File \"%s\" does not exist. ", Strings::ws2s(jsonPath).c_str());
+				writeLog("Listing versions: File \"%s\" does not exist. ", Strings::ws2s(jsonPath).c_str());
 				continue;
 			}
 			try {
@@ -631,10 +165,10 @@ std::vector<std::string> listVersion() {
 				ol pre = "x:";
 				versions.push_back(pre + info["id"].asString());
 				jsonFile.close();
-				writelog("Initialized version \"%s\". ", info["id"].asCString());
+				writeLog("Initialized version \"%s\". ", info["id"].asCString());
 			}
 			catch (std::exception e) {
-				writelog("Listing versions: Failed to initialize \"%s\": %s", Strings::ws2s(jsonPath).c_str(), e.what());
+				writeLog("Listing versions: Failed to initialize \"%s\": %s", Strings::ws2s(jsonPath).c_str(), e.what());
 			}
 		}
 	}
@@ -644,12 +178,12 @@ std::vector<std::string> listVersion() {
 int launchGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	std::thread thr([argv]()->int {
 		std::wstring av = Strings::s2ws(argv[1]);
-		writelog("Launching game \"%s\"...", argv[1]);
+		writeLog("Launching game \"%s\"...", argv[1]);
 		VersionInfo* target = nullptr;
 		std::string versionDir = rdata("GameDir").asString() + "versions";
 		std::wstring jsonPath = Strings::s2ws(versionDir) + LPATHSEP + av + LPATHSEP + av + L".json";
 		il(!isExists(jsonPath)) {
-			writelog("Launching: File \"%s\" does not exist. ", Strings::ws2s(jsonPath).c_str());
+			writeLog("Launching: File \"%s\" does not exist. ", Strings::ws2s(jsonPath).c_str());
 			target = nullptr;
 		}
 		else {
@@ -657,7 +191,7 @@ int launchGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 				target = new VersionInfo(jsonPath);
 			}
 			catch (std::exception e) {
-				writelog("Launching: Failed to initialize json \"%s\": %s", Strings::ws2s(jsonPath).c_str(), e.what());
+				writeLog("Launching: Failed to initialize json \"%s\": %s", Strings::ws2s(jsonPath).c_str(), e.what());
 				delete target;
 				target = nullptr;
 			}
@@ -674,7 +208,7 @@ int launchGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 		std::string cmdA = target->genLaunchCmd(cmd, rdata("GameDir").asString(), rdata("SelectedAccount").asInt(), features);
 		delete target;
 		il(cmdA == "") return 0;
-		writelog("Launch: %s", cmdA.c_str());
+		writeLog("Launch: %s", cmdA.c_str());
 		std::map<std::string,std::string> state = {};
 		execNotThrGetOutInvoke(cmd, &state, Strings::s2ws(rdata("GameDir").asString()), [](const std::string& o, void* r)->int {
 			il(r == nullptr) return 1;
@@ -729,7 +263,7 @@ int pageGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 		versionList->add(id, image, {"launchImage","launch "+id,"editImage",""});
 		n++;
 	}
-	versionList->yview("", 0);
+	versionList->yview("", 0, 0);
 	if (argc == -1) return 0;
 	swiPage(".pageGame", argc == -2);
 	return 0;
@@ -751,7 +285,7 @@ int addAccount(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 	msgBxs++;
 	std::string name = ".window" + std::to_string(msgBxs);
 	messageBoxes.push_back(name);
-	call({ "toplevel",name });
+	control(name, "toplevel");
 	std::string title = "dialog";
 	std::string content = "accounts.add.prompt";
 	call({ "wm","title",name,currentLanguage->localize(title) });
@@ -767,7 +301,7 @@ int selectAccount(ClientData clientData, Tcl_Interp* interp, int argc, const cha
 	size_t selected = std::atoi(argv[1]);
 	rdata("SelectedAccount") = selected;
 	((MyList*)clientData)->userSelect(selected);
-	flushData();
+	saveData();
 	return 0;
 }
 
@@ -777,11 +311,8 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	accountList->clear();
 	size_t n = 0;
 	for (const auto& i : accounts) {
-		il(i["userType"] == "please_support") {
-			accountList->add(i["userName"].asString()+"\n      accounts.please_support", "steveImage", {"editImage",""});
-		}
-		el (i["userType"] == "mojang") {
-			accountList->add(i["userName"].asString(), "<canvas>", {"editImage",""});
+		il(i["userType"] == "mojang") {
+			accountList->add(i["userName"].asString()+"\n      "+currentLanguage->localize("accounts.microsoft"), "<canvas>", {"editImage",""});
 			png_byte* png_file;
 			size_t file_size;
 			{
@@ -794,89 +325,43 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 				fread(png_file, 1, file_size, fp);
 				fclose(fp);
 			}
-			writelog("Started to paint canvas. ");
-			do {
-				png_byte* stream = png_file;
-				bool notpng = png_sig_cmp(png_file, 0, file_size);
-				if (notpng) {
-					delete[] png_file;
-					break;
-				}
-				png_structp png_ptr = png_create_read_struct(
-					PNG_LIBPNG_VER_STRING, 
-					(png_voidp)NULL, NULL, NULL);
-				if (!png_ptr) {
-					delete[] png_file;
-					break;
-				}
-				png_infop info_ptr = png_create_info_struct(png_ptr);
-				if (!info_ptr) {
-					delete[] png_file;
-					png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
-					break;
-				}
-				png_set_read_fn(png_ptr, &stream, [](png_structp png_ptr, png_bytep output, size_t sz) {
-					png_byte** io_ptr = (png_byte**)png_get_io_ptr(png_ptr);
-					if (io_ptr == NULL)
-						return;
-					memcpy(output, *io_ptr, sz);
-					(*io_ptr) += sz;
-				});
-				png_read_info(png_ptr, info_ptr);
-				png_uint_32 width = 0;
-				png_uint_32 height = 0;
-				int bit_depth = 0;
-				int color_type = -1;
-				png_uint_32 retval = png_get_IHDR(png_ptr, info_ptr,
-					&width,
-					&height,
-					&bit_depth,
-					&color_type,
-					NULL, NULL, NULL);
-				if (retval!=1) {
-					delete[] png_file;
-					png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-					break;
-				}
-				if (color_type == PNG_COLOR_TYPE_PALETTE)
-					png_set_palette_to_rgb(png_ptr);
-				if (png_get_valid(png_ptr, info_ptr,
-					PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png_ptr);
-				png_read_update_info(png_ptr, info_ptr);
-				const png_uint_32 bytesPerRow = png_get_rowbytes(png_ptr, info_ptr);
-				png_byte* rowData = new png_byte[bytesPerRow];
+			png_uint_32 width;
+			png_uint_32 height;
+			png_uint_32 bytesPerRow;
+			png_byte* data;
+			int a = readPNG(png_file, file_size, width, height, bytesPerRow, &data);
+			if (a == 0) {
+				writeLog("Started to paint canvas. ");
 				std::string clr = "#xxxxxx";
-				for (int i = 0; i < height; i++) {
-					png_read_row(png_ptr, rowData, NULL);
-					if (i < 8) continue;
-					if (i > 15)continue;
-					for (int j = 0; j < 16; j++) {
-						if (j < 8) continue;
-						int k = i - 8;
-						int l = j - 8;
-						clr[1] = toHex(rowData[j*4+0] / 16 % 16);
-						clr[2] = toHex(rowData[j*4+0] / 1 % 16);
-						clr[3] = toHex(rowData[j*4+1] / 16 % 16);
-						clr[4] = toHex(rowData[j*4+1] / 1 % 16);
-						clr[5] = toHex(rowData[j*4+2] / 16 % 16);
-						clr[6] = toHex(rowData[j*4+2] / 1 % 16);
-						call({ accountList->owned[accountList->owned.size() - 1].ctrlId + ".image","create","rect",
-							std::to_string(2 + k * 5),std::to_string(2 + l * 5),std::to_string(2 + k * 5 + 5),std::to_string(2 + l * 5 + 5),
+				for (int i = 8; i < 16; i++) {
+					for (int j = 8; j < 16; j++) {
+						clr[1] = toHex(data[i*bytesPerRow+j*4+0]/16 % 16);
+						clr[2] = toHex(data[i*bytesPerRow+j*4+0]/1 % 16);
+						clr[3] = toHex(data[i*bytesPerRow+j*4+1]/16 % 16);
+						clr[4] = toHex(data[i*bytesPerRow+j*4+1]/1 % 16);
+						clr[5] = toHex(data[i*bytesPerRow+j*4+2]/16 % 16);
+						clr[6] = toHex(data[i*bytesPerRow+j*4+2]/1 % 16);
+						call({ accountList->owned[accountList->owned.size()-1].ctrlId+".image","create","rect",
+							std::to_string(2+(i-8)*10),   std::to_string(2+(j-8)*10),
+							std::to_string(2+(i-8)*10+10),std::to_string(2+(j-8)*10+10),
 							"-fill",clr,"-outline","" });
 					}
 				}
-				png_read_end(png_ptr, NULL);
-				png_destroy_read_struct(&png_ptr,& info_ptr, (png_infopp)NULL);
-				delete[] png_file; 
-				delete[] rowData;
-				writelog("Successfully painted! ");
-			} while (false); // Used "while" for "break; ".
-			writelog("Stop painting. ");
+				writeLog("Successfully painted! ");
+			}
+			else {
+				writeLog("Error when trying to paint [%s]: %d", accountList->owned.tail->value.ctrlId, a);
+			}
+			delete[] data;
+			delete[] png_file;
+		}
+		ol{
+			accountList->add(i["userName"].asString()+"\n      "+currentLanguage->localize("accounts.legacy"), "steveImage", {"editImage",""});
 		}
 		accountList->bind(accountList->owned.size()-1, "<Button-1>", "selectAccount "+std::to_string(accountList->owned.size()-1));
 	}
 	accountList->select(rdata("SelectedAccount").asInt());
-	accountList->yview("", 0);
+	accountList->yview("", 0, 0);
 	if (argc == -1) return 0;
 	swiPage(".pageAcco", argc == -2);
 	return 0;
@@ -910,22 +395,21 @@ int selectLanguage(ClientData clientData, Tcl_Interp* interp, int argc, const ch
 	}
 	for (const auto& i : currentLanguage->lang)
 		call({ "set",i.first,i.second });
-	flushData();
+	saveData();
 	call({ "set","none","" });
-	call({ "wm","title",getRoot(ROOT),currentLanguage->localize("title") });
+	call({ "wm","title",ROOT,currentLanguage->localize("title") });
 	return 0;
 }
 
 int pageLang(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	((MyList*)clientData)->update();
-	((MyList*)clientData)->yview("", 0);
+	((MyList*)clientData)->yview("", 0, 0);
 	if (argc == -1) return 0;
 	swiPage(".pageLang", argc == -2);
 	return 0;
 }
 
-void fillColor(std::string rt_) {
-	std::string rt = getRoot(rt_);
+void fillColor(std::string rt) {
 	call({ rt,"config","-background",primaryColor });
 	std::string x = call({ rt,"config","-image" });
 	std::string y = call({ rt,"config","-compound" });
@@ -946,18 +430,26 @@ void colorUpdate() {
 	}
 }
 
+Tk_Window mainWin;
+std::string geometry;
+Tcl_ThreadId mainThr;
+
 int main() {
 
 	mkdir("RvL\\");
 	logFile = fopen("RvL\\log.txt", "w");
 	tclScriptLog = fopen("RvL\\tcl.txt", "w");
+	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
 	// Initialize Tcl/Tk. 
-	writelog("Initializing Tcl/Tk. ");
+	writeLog("Initializing Tcl/Tk. ");
 	interp = Tcl_CreateInterp();
 	Tcl_Init(interp);
 	Tk_Init(interp);
-	Tk_Window mainWin = Tk_MainWindow(interp);
+
+	// Initialize libcurl. 
+	writeLog("Initializing cURL. ");
+	curl_global_init(0);
 
 	// Initialize for ATL. 
 	CoInitializeEx(NULL, COINIT::COINIT_MULTITHREADED);
@@ -972,7 +464,7 @@ int main() {
 		FreeResource(IDR);
 	}
 
-	writelog("Initialize other things. ");
+	writeLog("Initialize other things. ");
 	initLanguages();
 	initData();
 	// Set the default language. 
@@ -986,7 +478,16 @@ int main() {
 		call({ "set",i.first,i.second });
 	call({ "set","none","" });
 
-	writelog("Creating images. ");
+	call({ "wm","iconbitmap",ROOT,"assets\\icon.ico" });
+	call({ "wm","title",ROOT,currentLanguage->localize("title") });
+	HWND hwnd = GetActiveWindow();
+	BOOL value = TRUE;
+	mainWin = Tk_MainWindow(interp);
+	writeLog("%lld %lld %lld", hwnd, Tk_GetHWND(Tk_WindowId(mainWin)), Tk_WindowId(mainWin));
+	DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
+	call({ "wm","geometry",ROOT,rdata("Geometry").asString() });
+
+	writeLog("Creating images. ");
 	// Icons. 
 	call({ "image","create","photo","releaseImage","-file","assets\\icon\\release.png" });
 	call({ "image","create","photo","snapshotImage","-file","assets\\icon\\snapshot.png" });
@@ -1017,10 +518,12 @@ int main() {
 	call({ "image","create","photo","blankImage","-file","assets\\misc\\blank.png" });
 	call({ "image","create","photo","horizontalImage","-file","assets\\misc\\horizontal.png" });
 	call({ "image","create","photo","steveImage","-file","assets\\misc\\steve.png" });
-
-	call({ "wm","iconbitmap",getRoot(ROOT),"assets\\icon.ico" });
-	call({ "wm","geometry",getRoot(ROOT),"600x400+25+25" });
-	call({ "wm","title",getRoot(ROOT),currentLanguage->localize("title") });
+	// Font
+	if (AddFontResourceExA("assets\\font.otf", FR_PRIVATE, 0) != 0) {
+		writeLog("Font successfully added. ");
+	}
+	else writeLog("Font adding failed. ");
+	call({ "font","create","font1","-family","Source Han Sans CN Medium","-size","10" });
 
 	primaryColor = "#1f1f1f";
 	secondaryColor = "#000000";
@@ -1036,7 +539,7 @@ int main() {
 				hoverColor = "#4c4c4c";
 				selectColor = "#353535";
 			}
-			el(primaryColor == "#1f1f1f") {
+			ol {
 				primaryColor = "#e6e6e6";
 				secondaryColor = "#ffffff";
 				textColor = "#000000";
@@ -1051,7 +554,7 @@ int main() {
 			return 0;
 		}, 0);
 
-	writelog("Creating tabs. ");
+	writeLog("Creating tabs. ");
 	control(".tabs", "frame", { "-width","40" });
 	control(".tabs.tabTitle", "ttk::label", { "-textvariable","title","-borderwidth","30","-image","titleImage","-compound","top" });
 	call({ "grid",".tabs.tabTitle" });
@@ -1079,26 +582,23 @@ int main() {
 	control(".pageSett.title", "ttk::label", { "-textvariable","item.sett" }); call({ "grid",".pageSett.title" });
 	control(".pageMods.title", "ttk::label", { "-textvariable","item.mods" }); call({ "grid",".pageMods.title" });
 	control(".pageLang.title", "ttk::label", { "-textvariable","item.lang" }); call({ "grid",".pageLang.title" });
-	pageCur = ".pageGame";
 
 	CreateCmd("msgbx", messageBox, 0);
-	CreateCmd("myplace", myplace, 0);
 
 	// Contents: Launch. 
 
-	control(".pageGame.content", "frame", {"-height", "114"});
-	MyScrollBar(".pageGame.content.scro",".pageGame.content.list.yview");
+	control(".pageGame.content", "frame");
+	MyScrollBar* gameScro = new MyScrollBar(".pageGame.content.scro",".pageGame.content.list.yview");
 	MyList* gameList = new MyList(".pageGame.content.list", ".pageGame.content.scro", false);
 	call({ "pack",".pageGame.content.scro","-side","right","-fill","y" });
 	call({ "pack",".pageGame.content.list","-side","left" });
 	call({ "grid",".pageGame.content" });
 	CreateCmd("launch", launchGame, 0);
-	call({ ".pageGame.content.scro","config","-command",".pageGame.content.list.yview" });
 	
 	// Contents: Account. 
 
 	control(".pageAcco.content", "frame");
-	MyScrollBar(".pageAcco.content.scro", ".pageAcco.content.list.yview");
+	MyScrollBar* accoScro = new MyScrollBar(".pageAcco.content.scro", ".pageAcco.content.list.yview");
 	MyList* accoList  = new MyList(".pageAcco.content.list", ".pageAcco.content.scro");
 	MyButtonIconActive(".pageAcco.content.add", "accounts.add", "addImage", "addAcc");
 	call({ "pack",".pageAcco.content.add","-side","top","-fill","x" });
@@ -1107,7 +607,6 @@ int main() {
 	call({ "grid",".pageAcco.content" });
 	CreateCmd("addAcc", addAccount, accoList);
 	CreateCmd("selectAccount", selectAccount, accoList);
-	call({ ".pageAcco.content.scro","config","-command",".pageAcco.content.list.yview" });
 
 	// Contents: Settings. 
 	
@@ -1135,7 +634,7 @@ int main() {
 	// Contents: Language. 
 
 	control(".pageLang.content", "frame");
-	MyScrollBar(".pageLang.content.scro", ".pageLang.content.list.yview");
+	MyScrollBar* langScro = new MyScrollBar(".pageLang.content.scro", ".pageLang.content.list.yview");
 	MyList* langList = new MyList(".pageLang.content.list", ".pageLang.content.scro");
 	call({ "pack",".pageLang.content.scro","-side","right","-fill","y" });
 	call({ "pack",".pageLang.content.list","-side","left" });
@@ -1168,12 +667,19 @@ int main() {
 	CreateCmd("swiSett", pageSett,        0);
 	CreateCmd("swiMods", pageMods,        0);
 	CreateCmd("swiLang", pageLang, langList);
-	control(".sep","ttk::separator",{ "-orient","vertical" });
-	call({"pack",".sep","-side","left","-fill","y"});
-	call({ "pack",pageCur });
 	MyButtonIconActive(".themeButton", "", "darkImage", "chTheme");
-	call({ "place",".themeButton","-x","-44","-y","0","-relx","1" });
-	std::string t = pageCur;
+	call({ "place",".themeButton","-x","-89","-y","0","-relx","1" });
+
+	call({ "image","create","photo","background","-file","assets\\background.png" });
+	control(".bg", "ttk::label", { "-image","background" });
+	call({ "place",".bg","-x","0","-y","0" });
+	call({ "update" });
+	std::string bgHei = "-"+std::to_string(std::atoi(call({ "winfo","height",".bg" }).c_str())/2);
+	std::string bgWid = "-"+std::to_string(std::atoi(call({ "winfo","width",".bg" }).c_str())/2);
+	call({ "place",".bg","-relx","0.5","-rely","0.5","-x",bgWid,"-y",bgHei });
+	call({ "lower",".bg" });
+
+	pageCur = "";
 	pageGame(gameList, interp, -1, nullptr);
 	pageDown(       0, interp, -1, nullptr);
 	pageAcco(accoList, interp, -1, nullptr);
@@ -1182,12 +688,10 @@ int main() {
 	pageLang(langList, interp, -1, nullptr);
 	colorUpdate();
 	call({ "update" });
-	il(t==".pageGame") { pageGame(gameList, interp, -2, nullptr); }
-	il(t==".pageDown") { pageDown(       0, interp, -2, nullptr); }
-	il(t==".pageAcco") { pageAcco(accoList, interp, -2, nullptr); }
-	il(t==".pageSett") { pageSett(       0, interp, -2, nullptr); }
-	il(t==".pageMods") { pageMods(       0, interp, -2, nullptr); }
-	il(t==".pageLang") { pageLang(langList, interp, -2, nullptr); }
+	std::string t = ".pageGame";
+	pageGame(gameList, interp, -1, nullptr);
+	call({ "update" });
+	swiPage(t, 1);
 	//
 	//// Start the mainloop. 
 	//while (1) {
@@ -1214,20 +718,74 @@ int main() {
 	//	}
 	//}
 	//
+	CreateCmd("on_close", [](ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[])->int {
+		writeLog("Closing application.");
+		rdata("Geometry") = call({ "winfo","geometry","." });
+		Tk_DestroyWindow(mainWin);
+		return 0;
+	}, 0);
+	call({ "wm","protocol",".","WM_DELETE_WINDOW","on_close" });
+	call({ "wm","protocol",".","WM_SAVE_YOURSELF","on_close" });
+
+	// Threads
+	std::thread thr([]()->int {
+		writeLog("Trying to get the version manifest...");
+		char* dat;
+		size_t sz;
+		int status = URLGet("https://launchermeta.mojang.com/mc/game/version_manifest.json", dat, sz);
+		std::fstream ostr = std::fstream("test.json", std::ios::out);
+		ostr.write(dat, sz);
+		ostr.close();
+		delete dat;
+		if (status) writeLog("Failed to get the version manifest at step %d. ", status);
+		else writeLog("Successfully got the version manifest! ");
+		return 0;
+	});
+	thr.detach();
+	auto evSetup = [](ClientData clientData, int flags) {
+
+	};
+	auto evCheck = [](ClientData clientData, int flags) {
+
+	};
+	Tcl_CreateEventSource(evSetup, evCheck, 0);
+	Tcl_ThreadId gameUpdThread;	Tcl_CreateThread(&gameUpdThread, [](ClientData clientData)->unsigned {
+		Tcl_Event* ev = (Tcl_Event*)Tcl_Alloc(sizeof(ThreadEvent));
+		ev->proc = [](Tcl_Event* evPtr, int flags)->int {
+
+			return 0;
+		};
+		Tcl_ThreadQueueEvent(mainThr, ev, TCL_QUEUE_HEAD);
+		return 0;
+	}, 0, TCL_THREAD_STACK_DEFAULT, TCL_THREAD_NOFLAGS);
+
 	Tk_MainLoop();
 
 	// Clean the things.
-	
+
+	writeLog("Started to clean things. ");
+	Tcl_DeleteEventSource(evSetup, evCheck, 0);
 	for (auto i : allLanguages) {
 		delete i.second;
 	}
-	delete langList;
+	delete gameScro;
 	delete gameList;
-	fclose(logFile);
-	fclose(tclScriptLog);
+	delete accoScro;
+	delete accoList;
+	delete langScro;
+	delete langList;
 	CoUninitialize();
+	curl_global_cleanup();
 	Tcl_DeleteInterp(interp);
 	Tcl_Finalize();
-
+	writeLog("Deleted Tcl Interpreter. ");
+	if (RemoveFontResourceExA("assets\\font.otf", FR_PRIVATE, 0) != 0) {
+		writeLog("Font successfully removed. ");
+	}
+	else writeLog("Font removing failed. ");
+	saveData();
+	writeLog("Programme ended. ");
+	fclose(logFile);
+	fclose(tclScriptLog);
 	return 0;
 }

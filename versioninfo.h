@@ -10,6 +10,7 @@
 #include <zip/unzip.h>
 #include "help.h"
 #include "data.h"
+#include "control.h"
 
 class VersionInfo {
 public:
@@ -206,19 +207,18 @@ public:
 				this->v = { json.asString() };
 			}
 			ol {
-				for (int i = 0; i < json["value"].size(); i ++) {
-					this->v.push_back(json["value"][i].asString());
+				for (const auto& i : json["value"]) {
+					this->v.push_back(i.asString());
 				}
 				il(json.isMember("rules")) {
-					int rs = json["rules"].size();
-					for (int i = 0; i < rs; i++) {
-						r.push_back(json["rules"][i]);
+					for (const auto& i : json["rules"]) {
+						this->r.push_back(i);
 					}
 				}
 			}
 		}
 		[[nodiscard]] bool allow(std::vector<Rule::Feature> features) {
-			for (Rule& i : r) {
+			for (Rule& i : this->r) {
 				il(!i.isAllow(features)) {
 					return false;
 				}
@@ -232,8 +232,8 @@ public:
 		Json::Value info;
 		Json::Reader reader;
 		reader.parse(jsonFile, info);
-		this->init(info);
 		jsonFile.close();
+		this->init(info);
 	}
 	VersionInfo(Json::Value info) {
 		this->init(info);
@@ -257,16 +257,16 @@ public:
 	std::string getAssetIndexId() { return this->assetIndexId; }
 public:
 	std::string genLaunchCmd(std::wstring&cmd, const std::string& gameDir, const int selectedAccount, const std::vector<Rule::Feature> features) {
-		writelog("Generating launching command: %s, \"%s\". ", this->getId().c_str(), gameDir.c_str());
+		writeLog("Generating launching command: %s, \"%s\". ", this->getId().c_str(), gameDir.c_str());
 		std::string versionPath = "versions"; versionPath += PATHSEP + this->getId() + PATHSEP + this->getId();
 		std::string nativePath = gameDir + versionPath + "-natives\\";
 		il(!isDir(nativePath)) SHCreateDirectoryExA(NULL, nativePath.c_str(), NULL);
-		writelog("Generating classpath. ");
+		writeLog("Generating classpath. ");
 		std::string cp = this->genClasspath(gameDir, versionPath, nativePath, features);
-		writelog("Classpath is ready. ");
+		writeLog("Classpath is ready. ");
 		std::string finalJava = this->findJava();
-		writelog("Found Java \"%s\". ", finalJava.c_str());
-		writelog("Reloging-in the account. ");
+		writeLog("Found Java \"%s\". ", finalJava.c_str());
+		writeLog("Reloging-in the account. ");
 		//* Relogin the account. 
 		int wid = rdata("WindowWidth").asInt(), hei = rdata("WindowHeight").asInt();
 		std::map<std::string, std::string> gameVals;
@@ -293,15 +293,17 @@ public:
 		jvmVals["${natives_directory}"]=	nativePath;
 		jvmVals["${launcher_name}"]=		"RiverLauncher";
 		jvmVals["${launcher_version}"]=		"3.0.0.0";
-		writelog("Generating JVM arguments. ");
+		writeLog("Generating JVM arguments. ");
 		std::string jvmArgs = this->genJvmArgs(features, jvmVals);
-		writelog("Generating game arguments. ");
+		writeLog("Generating game arguments. ");
 		std::string gameArgs = this->genGameArgs(features, gameVals);
-		writelog("Connecting the arguments. ");
 		il(gameArgs == "") {
+			call({ "msgbx","error","minecraft.no_args","error" });
+			writeLog("Failed to generate game arguments. ");
 			cmd = L"";
 			return "";
 		}
+		writeLog("Connecting the arguments. ");
 		std::string output(16384,'\0');
 		output = QUOT + finalJava + QUOT;
 		il(Strings::count(jvmArgs, "-Djava.library.path") == 0) {
@@ -311,10 +313,10 @@ public:
 			output += " " + Strings::replace(this->getLoggingArgument(),
 				"${path}", std::string{}+QUOT+"versions"+PATHSEP+this->getId()+PATHSEP+this->getLoggingId()+QUOT);
 		}
-		output += " -Xmn"+std::to_string(4000/*//* Memory Allocation! */ ) + "m -XX:+UseG1GC -XX:-UseAdaptiveSizePolicy -XX:-OmitStackTraceInFastThrow -Dlog4j2.formatMsgNoLookups=true";
+		output += " -Xmn"+std::to_string(4000/*//* Memory Allocation! */ )+"m -XX:+UseG1GC -XX:-UseAdaptiveSizePolicy -XX:-OmitStackTraceInFastThrow -Dlog4j2.formatMsgNoLookups=true";
 		output += " " + jvmArgs + " " + this->getMainClass() + " " + gameArgs;
 		cmd = Strings::s2ws(output);
-		writelog("Finish generating launching command. ");
+		writeLog("Finish generating launching command. ");
 		return output;
 	}
 protected:
@@ -332,7 +334,7 @@ protected:
 		for (const auto& i : available) {
 			libsVec.push_back(i.second);
 		}
-		libsVec.push_back("\"" + versionPath + ".jar\"");
+		libsVec.push_back(QUOT + versionPath + ".jar" + QUOT);
 		return Strings::join(libsVec, ";");
 	}
 	std::string genJvmArgs(const std::vector<Rule::Feature>& features, std::map<std::string,std::string>& jvmVals) {
@@ -413,8 +415,7 @@ protected:
 				}
 			}
 		}
-		ol {
-			call({ "msgbx","error","minecraft.no_args","error" });
+		ol{
 			return "";
 		}
 		return gameArg;

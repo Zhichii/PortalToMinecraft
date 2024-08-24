@@ -23,8 +23,8 @@ namespace Strings {
 		#endif
 		std::wstring ret(wstr);
 		if (i == EILSEQ) {
-			writelog("Failed to convert string to wstring. ");
-			writelog("LenO: %u. Len: %u. Errcode: %u", lenO_, len_, i);
+			writeLog("Failed to convert string to wstring. ");
+			writeLog("LenO: %u. Len: %u. Errcode: %u", lenO_, len_, i);
 		}
 		delete[] wstr;
 		return ret;
@@ -46,8 +46,8 @@ namespace Strings {
 		#endif
 		std::string ret(str);
 		if (i == EILSEQ) {
-			writelog("Failed to convert wstring to string. ");
-			writelog("LenO: %u. Len: %u. Errcode: %u", lenO_, len_, i);
+			writeLog("Failed to convert wstring to string. ");
+			writeLog("LenO: %u. Len: %u. Errcode: %u", lenO_, len_, i);
 		}
 		delete[] str;
 		return ret;
@@ -55,20 +55,26 @@ namespace Strings {
 
 	// Format the string, same with sprintf(). Note: use .c_str() in the arguments. 
 	std::string strFormat(const std::string format, ...) {
-		std::string dst = "";
+		std::string dst;
 		va_list args;
 		va_start(args, format);
-		_vsprintf_s_l(formatCacheStr, 16384, format.c_str(), NULL, args);
+		char* temp = new char[16384];
+		_vsprintf_s_l(temp, 16384, format.c_str(), NULL, args);
+		dst = temp;
+		delete[] temp;
 		va_end(args);
-		return formatCacheStr;
+		return dst;
 	}
 	std::wstring strFormat(const std::wstring format, ...) {
-		std::string dst = "";
+		std::wstring dst;
 		va_list args;
 		va_start(args, format);
-		_vswprintf_s_l(formatCacheStrW, 16384, format.c_str(), NULL, args);
+		wchar_t* temp = new wchar_t[16384];
+		_vswprintf_s_l(temp, 16384, format.c_str(), NULL, args);
+		dst = temp;
+		delete[] temp;
 		va_end(args);
-		return formatCacheStrW;
+		return dst;
 	}
 	
 	// Find the position of the substring in the string. 

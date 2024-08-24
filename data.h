@@ -9,7 +9,7 @@
 
 Json::Value data;
 
-void flushData() {
+void saveData() {
 	std::ofstream ofs;
 	ofs.open(S("RvL") + PATHSEP + "config.json", std::ios::out);
 	Json::StyledWriter sw;
@@ -82,8 +82,9 @@ void initData() {
 	if (!data.isMember("Javas")) data["Javas"] = Json::arrayValue;
 	if (!data.isMember("Accounts")) data["Accounts"] = Json::arrayValue;
 	if (!data.isMember("SelectedAccount")) data["SelectedAccount"] = 0;
+	if (!data.isMember("Geometry")) data["Geometry"] = "1050x745+100+50";
 	data["GameDir"] = Strings::formatDirStr(data["GameDir"].asString());
-	flushData();
+	saveData();
 }
 
 Json::Value& rdata(std::string key) {
