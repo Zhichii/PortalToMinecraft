@@ -1,11 +1,14 @@
 #define STATIC_BUILD
 #define TCL_USE_STATIC_PACKAGES
 #define CPP_TKINTER_SAFE_FUNCTIONS
+#define _CRTDBG_MAP_ALLOC
 #define CURL_STATICLIB
 #define TCL_THREADS
 #define il if
 #define el else if
 #define ol else
+#include <stdlib.h>
+#include <crtdbg.h>
 #include <tcl.h>
 #include <dwmapi.h>
 #include <direct.h>
@@ -15,10 +18,6 @@
 #include <windows.h>
 #include <tk.h>
 #include <tkPlatDecls.h>
-#include <json/json.h>
-#include <json/json_value.cpp>
-#include <json/json_writer.cpp>
-#include <json/json_reader.cpp>
 #include <libpng/png.h>
 #include <mutex>
 #include <random>
@@ -43,6 +42,7 @@ void writeLog(std::string format, ...) {
 #define O_DPATHSEP "//"
 #define O_LPATHSEP L"/"
 #define QUOT "\""
+#include <json.h>
 #include "help.h"
 #include "strings.h"
 #include "data.h"
@@ -140,6 +140,27 @@ void swiPage(std::string page, bool noAnimation) {
 	call({ "place","forget",pageCur });
 	call({ "pack",pageCur,"-pady",contentPaddingStr });
 	doingAnim.unlock();
+}
+
+void fillColor(std::string rt) {
+	call({ rt,"config","-background",primaryColor });
+	std::string x = call({ rt,"config","-image" });
+	std::string y = call({ rt,"config","-compound" });
+	il(x != "unknown option \"-image\"" && x != "-image image Image {} {}") {
+		il(Strings::count(y, "center") == 0) call({ rt,"config","-foreground",textColor });
+	} ol call({ rt,"config","-foreground",textColor });
+	il(Strings::count(y,"center")==0) call({ rt,"config","-foreground",textColor });
+	std::string a = call({ "winfo","children",rt });
+	if (a == "") return;
+	std::vector<std::string> children = Strings::split(a, " ");
+	for (const auto& i : children) fillColor(i);
+}
+
+void colorUpdate() {
+	fillColor(ROOT);
+	for (const auto& i : colorUpdates) {
+		i.second(clrUpdCd[i.first]);
+	}
 }
 
 std::vector<std::string> listVersion() {
@@ -287,13 +308,14 @@ int addAccount(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 	messageBoxes.push_back(name);
 	control(name, "toplevel");
 	std::string title = "dialog";
-	std::string content = "accounts.add.prompt";
+	std::string content = "accounts.add.ask_type";
 	call({ "wm","title",name,currentLanguage->localize(title) });
 	control(name + ".text", "ttk::label", { "-text",currentLanguage->localize(content) });
 	control(name + ".ok", "ttk::button", { "-text",currentLanguage->localize("ok") });
 	call({ name + ".ok","config","-command","destroy " + name });
 	call({ "grid",name + ".text" });
 	call({ "grid",name + ".ok" });
+	fillColor(name);
 	return 0;
 }
 
@@ -311,7 +333,8 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	accountList->clear();
 	size_t n = 0;
 	for (const auto& i : accounts) {
-		il(i["userType"] == "mojang") {
+		writeLog("UT: %s. ", i["userType"].asCString());
+		il(i["userType"].asString() == "mojang") {
 			accountList->add(i["userName"].asString()+"\n      "+currentLanguage->localize("accounts.microsoft"), "<canvas>", {"editImage",""});
 			png_byte* png_file;
 			size_t file_size;
@@ -393,9 +416,9 @@ int selectLanguage(ClientData clientData, Tcl_Interp* interp, int argc, const ch
 		languageList->userSelect(atoi(argv[2]));
 		currentLanguage = allLanguages[argv[1]];
 	}
+	saveData();
 	for (const auto& i : currentLanguage->lang)
 		call({ "set",i.first,i.second });
-	saveData();
 	call({ "set","none","" });
 	call({ "wm","title",ROOT,currentLanguage->localize("title") });
 	return 0;
@@ -409,34 +432,16 @@ int pageLang(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	return 0;
 }
 
-void fillColor(std::string rt) {
-	call({ rt,"config","-background",primaryColor });
-	std::string x = call({ rt,"config","-image" });
-	std::string y = call({ rt,"config","-compound" });
-	il(x != "unknown option \"-image\"" && x != "-image image Image {} {}") {
-		il(Strings::count(y, "center") == 0) call({ rt,"config","-foreground",textColor });
-	} ol call({ rt,"config","-foreground",textColor });
-	il(Strings::count(y,"center")==0) call({ rt,"config","-foreground",textColor });
-	std::string a = call({ "winfo","children",rt });
-	if (a == "") return;
-	std::vector<std::string> children = Strings::split(a, " ");
-	for (const auto& i : children) fillColor(i);
-}
-
-void colorUpdate() {
-	fillColor(ROOT);
-	for (const auto& i : colorUpdates) {
-		i.second(clrUpdCd[i.first]);
-	}
-}
-
 Tk_Window mainWin;
 std::string geometry;
 Tcl_ThreadId mainThr;
 
 int main() {
 
-	mkdir("RvL\\");
+	if (mkdir("RvL\\") != 0 && errno == ENOENT) {
+		MessageBoxA(nullptr, "Failed to make dir [RvL\\]. ", "Error", MB_ICONERROR | MB_OK);
+		return 0;
+	}
 	logFile = fopen("RvL\\log.txt", "w");
 	tclScriptLog = fopen("RvL\\tcl.txt", "w");
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -523,7 +528,7 @@ int main() {
 		writeLog("Font successfully added. ");
 	}
 	else writeLog("Font adding failed. ");
-	call({ "font","create","font1","-family","Source Han Sans CN Medium","-size","10" });
+	call({ "font","create","font1","-family","Source Han Sans CN","-size","10","-weight","bold" });
 
 	primaryColor = "#1f1f1f";
 	secondaryColor = "#000000";
@@ -670,14 +675,16 @@ int main() {
 	MyButtonIconActive(".themeButton", "", "darkImage", "chTheme");
 	call({ "place",".themeButton","-x","-89","-y","0","-relx","1" });
 
-	call({ "image","create","photo","background","-file","assets\\background.png" });
-	control(".bg", "ttk::label", { "-image","background" });
-	call({ "place",".bg","-x","0","-y","0" });
-	call({ "update" });
-	std::string bgHei = "-"+std::to_string(std::atoi(call({ "winfo","height",".bg" }).c_str())/2);
-	std::string bgWid = "-"+std::to_string(std::atoi(call({ "winfo","width",".bg" }).c_str())/2);
-	call({ "place",".bg","-relx","0.5","-rely","0.5","-x",bgWid,"-y",bgHei });
-	call({ "lower",".bg" });
+	if (isExists("assets\\background.png")) {
+		call({ "image","create","photo","background","-file","assets\\background.png" });
+		control(".bg", "ttk::label", { "-image","background" });
+		call({ "place",".bg","-x","0","-y","0" });
+		call({ "update" });
+		std::string bgHei = "-"+std::to_string(std::atoi(call({ "winfo","height",".bg" }).c_str())/2);
+		std::string bgWid = "-"+std::to_string(std::atoi(call({ "winfo","width",".bg" }).c_str())/2);
+		call({ "place",".bg","-relx","0.5","-rely","0.5","-x",bgWid,"-y",bgHei });
+		call({ "lower",".bg" });
+	}
 
 	pageCur = "";
 	pageGame(gameList, interp, -1, nullptr);
@@ -787,5 +794,6 @@ int main() {
 	writeLog("Programme ended. ");
 	fclose(logFile);
 	fclose(tclScriptLog);
+	_CrtDumpMemoryLeaks();
 	return 0;
 }

@@ -484,9 +484,8 @@ struct MyList {
 	}
 	void clear() {
 		LinkList<ItemRecord>::Node<ItemRecord>* cur = this->owned.head;
-		size_t i = 1;
 		while(cur!=nullptr) {
-			std::string t1 = this->frameid + "." + std::to_string(i);
+			std::string t1 = cur->value.ctrlId;
 			std::string t2 = t1 + ".image";
 			std::string t22 = t1 + ".text";
 			std::string t3;
@@ -497,14 +496,9 @@ struct MyList {
 				call({ "destroy",t3 });
 			}
 			call({ "destroy",t1 });
-			Tcl_DeleteCommand(interp, (t1+".mw").c_str());
-			Tcl_DeleteCommand(interp, (t2+".b1").c_str());
-			Tcl_DeleteCommand(interp, (t2+".enter").c_str());
-			Tcl_DeleteCommand(interp, (t2+".leave").c_str());
-			i++;
-			auto t = cur->next;
+			auto next = cur->next;
 			delete cur;
-			cur = t;
+			cur = next;
 		}
 		this->owned.head = nullptr;
 		this->owned.sz = 0;
@@ -512,11 +506,11 @@ struct MyList {
 	}
 	~MyList() {
 		owned.~LinkList();
-		Tcl_DeleteCommand(interp, (this->frameid + ".mw").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".n1").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".enter").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".leave").c_str());
-		Tcl_DeleteCommand(interp, (this->frameid + ".yview").c_str());
+		Tcl_DeleteCommand(interp, (this->frameid+".mw").c_str());
+		Tcl_DeleteCommand(interp, (this->frameid+".n1").c_str());
+		Tcl_DeleteCommand(interp, (this->frameid+".enter").c_str());
+		Tcl_DeleteCommand(interp, (this->frameid+".leave").c_str());
+		Tcl_DeleteCommand(interp, (this->frameid+".yview").c_str());
 	}
 };
 

@@ -7,17 +7,20 @@ This software has used libraries and a font below. Thanks!
 	https://tcl.tk
 2. libpng
 	https://libpng.sourceforge.io/index.html
-3. JsonCpp
+3. JsonCpp ( Used in the past )
 	https://github.com/open-source-parsers/jsoncpp
 4. Source Han Sans
 	https://github.com/adobe-fonts/source-han-sans
-5. C++ 标准库，由MSVC实现（C++ Standard Library implemented by MSVC）。
+6. libcurl
+	https://curl.se/libcurl
+5. C++ 标准 ( C++ Standard )
+	由 MSVC 实现 ( Implemented by MSVC )
 
 在标明原作者为我的前提下，任何人都可以使用、复制、修改和分发本软件，但是不能以此盈利。
 Everyone can use, copy, modify and distribute this software if declare that the origin author is me, but no making money from this. 
 
 我的昵称为“山邱HlHill”，活跃于微信、QQ、哔哩哔哩、Github、Microsoft Outlook等平台。
-My nickname is "HlHillQiu", and I have accounts on Weixin, QQ, Bilibili, Github, Microsoft Outlook, etc. 
+My nickname is "HlHillQiu", and I'm active on Weixin, QQ, Bilibili, Github, Microsoft Outlook, etc. 
 以下为我的联系方式：
 These are ways to contact to me: 
 Github：https://github.com/Zhichii/ 。

@@ -10,7 +10,7 @@
 #endif
 #include "resource.h"
 #include "strings.h"
-#include <json/json.h>
+#include <json.h>
 
 class Language;
 
@@ -120,6 +120,7 @@ void initLanguages() {
 			if (i == "lang.name") name = val[i].asString();
 		}
 		allLanguages[i.first] = new Language(i.first, name, vpss);
+		val.~Value();
 	}
 }
 

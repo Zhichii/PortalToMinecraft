@@ -110,15 +110,16 @@
       <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Netapi32.lib;msvcrt.lib;dwmapi.lib;crypt32.lib;wldap32.lib;normaliz.lib;libs\itcl424ts.lib;libs\itclstub424.lib;libs\sqlite3442ts.lib;libs\tcl86ts.lib;libs\tcldde14s.lib;libs\tclreg13s.lib;libs\tclstub86.lib;libs\tdbc117ts.lib;libs\tdbcmysql117ts.lib;libs\tdbcodbc117ts.lib;libs\tdbcpostgres117ts.lib;libs\tdbcstub117.lib;libs\thread289ts.lib;libs\tk86ts.lib;libs\tkstub86.lib;libs\libpng16_static.lib;libs\libcurl_a.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Netapi32.lib;msvcrtd.lib;dwmapi.lib;crypt32.lib;wldap32.lib;normaliz.lib;libs\itcl424ts.lib;libs\itclstub424.lib;libs\sqlite3442ts.lib;libs\tcl86ts.lib;libs\tcldde14s.lib;libs\tclreg13s.lib;libs\tclstub86.lib;libs\tdbc117ts.lib;libs\tdbcmysql117ts.lib;libs\tdbcodbc117ts.lib;libs\tdbcpostgres117ts.lib;libs\tdbcstub117.lib;libs\thread289ts.lib;libs\tk86ts.lib;libs\tkstub86.lib;libs\libpng16_static.lib;libs\libcurl_a.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <StackReserveSize>32768</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -142,7 +143,7 @@
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <HeapReserveSize>
       </HeapReserveSize>
-      <StackReserveSize>16777216</StackReserveSize>
+      <StackReserveSize>32768</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

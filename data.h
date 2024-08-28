@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <fstream>
 #include "help.h"
-#include <json/json.h>
+#include <json.h>
 
 Json::Value data;
 

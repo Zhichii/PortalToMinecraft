@@ -79,12 +79,6 @@ bool isDir(const std::wstring& pathName) {
 	else return false;
 }
 
-void wait(int ms = 10) {
-#ifdef _WIN32
-    Sleep(ms);
-#endif
-}
-
 // Open a file-open dialog. 
 std::string FileDialog(const std::string &path = "", const std::string& title = "", const char* filter = "All files (*.*)\0*.*\0\0") {
 	OPENFILENAMEA ofn;
@@ -323,15 +317,7 @@ int execNotThrGetOutInvoke(std::wstring cmd, void* c, const std::wstring& path =
 	return 0;
 }
 
-Json::Value genMap(std::vector<std::pair<Json::String,Json::Value>> map) {
-	Json::Value temp;
-	for (const auto& i : map) {
-		temp[i.first] = i.second;
-	}
-	return temp;
-}
-
-void _stdcall EnDebugBreak() {
+inline void _stdcall EnDebugBreak() {
 	__try {
 		DebugBreak();
 	}
