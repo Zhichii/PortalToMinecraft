@@ -270,8 +270,8 @@ public:
 		//* Relogin the account. 
 		int wid = rdata("WindowWidth").asInt(), hei = rdata("WindowHeight").asInt();
 		std::map<std::string, std::string> gameVals;
-		gameVals["${version_name}"]=		QUOT+this->getId()+QUOT;
-		gameVals["${game_directory}"]=		QUOT+Strings::replace(gameDir,"\\","\\\\")+QUOT;
+		gameVals["${version_name}"]=		this->getId();
+		gameVals["${game_directory}"] =		gameDir;
 		gameVals["${assets_root}"]=			"assets";
 		gameVals["${assets_index_name}"]=	this->getAssetIndexId();
 		gameVals["${version_type}"]=		this->getType();
@@ -334,7 +334,7 @@ protected:
 		for (const auto& i : available) {
 			libsVec.push_back(i.second);
 		}
-		libsVec.push_back(QUOT + versionPath + ".jar" + QUOT);
+		libsVec.push_back(versionPath + ".jar");
 		return Strings::join(libsVec, ";");
 	}
 	std::string genJvmArgs(const std::vector<Rule::Feature>& features, std::map<std::string,std::string>& jvmVals) {
@@ -348,7 +348,9 @@ protected:
 						if (jvmVals.contains(m)) m = jvmVals[m];
 					}
 					k = Strings::join(l, "=");
-					il(Strings::count(k, " ")) jvmArgVec.push_back("\""+k+"\"");
+					k = Strings::replace(k, "\\", "\\\\");
+					k = Strings::replace(k, "\"", "\\\"");
+					il(Strings::count(k, " ")) jvmArgVec.push_back(QUOT+k+QUOT);
 					ol jvmArgVec.push_back(k);
 				}
 			}
@@ -387,7 +389,9 @@ protected:
 							flag__tweakClass = false;
 							continue;
 						}
-						il(Strings::count(k, " ")) gameArgVec.push_back("\""+k+"\"");
+						k = Strings::replace(k, "\\", "\\\\");
+						k = Strings::replace(k, "\"", "\\\"");
+						il(Strings::count(k, " ")) gameArgVec.push_back(QUOT+k+QUOT);
 						ol gameArgVec.push_back(k);
 					}
 				}
@@ -402,7 +406,11 @@ protected:
 		el (this->getLegacyGameArguments() != "") {
 			gameArg = this->getLegacyGameArguments();
 			for (const auto& i : gameVals) {
-				gameArg = Strings::replace(gameArg, i.first, i.second);
+				std::string k = i.second;
+				k = Strings::replace(k, "\\", "\\\\");
+				k = Strings::replace(k, "\"", "\\\"");
+				il(Strings::count(k, " ")) k = QUOT+k+QUOT;
+				gameArg = Strings::replace(gameArg, i.first, k);
 			}
 			il(Strings::count(gameArg, " --tweakClass optifine.OptiFineForgeTweaker")) {
 				gameArg = Strings::replace(gameArg, " --tweakClass optifine.OptiFineForgeTweaker", "");
@@ -489,11 +497,11 @@ protected:
 		}
 		this->gameType = info["type"].asString();
 		il(info.isMember("arguments")) {
-			for (int i = 0; i < info["arguments"]["game"].size(); i ++) {
-				this->gameArguments.push_back(info["arguments"]["game"][i]);
+			for (size_t i = 0; i < info["arguments"]["game"].size(); i ++) {
+				this->gameArguments.push_back(info["arguments"]["game"][(int)i]);
 			}
-			for (int i = 0; i < info["arguments"]["jvm"].size(); i++) {
-				this->jvmArguments.push_back(info["arguments"]["jvm"][i]);
+			for (size_t i = 0; i < info["arguments"]["jvm"].size(); i++) {
+				this->jvmArguments.push_back(info["arguments"]["jvm"][(int)i]);
 			}
 		}
 		il(info.isMember("minecraftArguments")) {

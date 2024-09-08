@@ -17,7 +17,7 @@ namespace Strings {
 		wchar_t* wstr = new wchar_t[len];
 		memset(wstr, 0, len*2);
 		#ifdef _WIN32
-			errno_t i = MultiByteToWideChar(CP_UTF8, MB_USEGLYPHCHARS, str, lenO, wstr, len);
+			errno_t i = MultiByteToWideChar(CP_UTF8, MB_USEGLYPHCHARS, str, (int)lenO, wstr, (int)len);
 		#else
 			mbstowcs(wstr, str, len);
 		#endif
@@ -40,7 +40,7 @@ namespace Strings {
 		char* str = new char[len];
 		memset(str, 0, len);
 		#ifdef _WIN32
-			errno_t i = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, wstr, lenO, str, len, NULL, NULL);// wcstombs_s(&lenO, str, len - 1, wstr, len);
+			errno_t i = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, wstr, (int)lenO, str, (int)len, NULL, NULL);// wcstombs_s(&lenO, str, len - 1, wstr, len);
 		#else
 			errno_t i = wcstombs(str, wstr, len);
 		#endif
@@ -78,10 +78,10 @@ namespace Strings {
 	}
 	
 	// Find the position of the substring in the string. 
-	std::vector<int> find(const std::string& str, const std::string& substr) {
-		std::vector<int> vi;
-		for (int i = 0; i < str.size(); i++) {
-			for (int j = 0; j < substr.size(); j++) {
+	std::vector<size_t> find(const std::string& str, const std::string& substr) {
+		std::vector<size_t> vi;
+		for (size_t i = 0; i < str.size(); i++) {
+			for (size_t j = 0; j < substr.size(); j++) {
 				if ((i + j) > str.size()) break;
 				if (str[i + j] != substr[j]) break;
 				if (j == (substr.size() - 1)) {
@@ -94,24 +94,10 @@ namespace Strings {
 	}
 
 	// Count how many time the substring appear in the string. 
-	int count(const std::string& str, const std::string& substr) {
-		int cnt = 0;
-		for (int i = 0; i < str.size(); i++) {
-			for (int j = 0; j < substr.size(); j++) {
-				if ((i + j) > str.size()) break;
-				if (str[i + j] != substr[j]) break;
-				if (j == (substr.size() - 1)) {
-					cnt++;
-					break;
-				}
-			}
-		}
-		return cnt;
-	}
-	int count(const std::wstring& str, const std::wstring& substr) {
-		int cnt = 0;
-		for (int i = 0; i < str.size(); i++) {
-			for (int j = 0; j < substr.size(); j++) {
+	size_t count(const std::string& str, const std::string& substr) {
+		size_t cnt = 0;
+		for (size_t i = 0; i < str.size(); i++) {
+			for (size_t j = 0; j < substr.size(); j++) {
 				if ((i + j) > str.size()) break;
 				if (str[i + j] != substr[j]) break;
 				if (j == (substr.size() - 1)) {
@@ -123,9 +109,9 @@ namespace Strings {
 		return cnt;
 	}
 
-	// Slice the string as Python do. 
+	// Slice the string as Python. 
 	// Include head without tail. 
-	std::string slice(const std::string& baseStr, long long from = 0, long long to = 0, int step = 1) {
+	std::string sliceN(const std::string& baseStr, size_t from = 0, size_t to = 0, long long step = 1) {
 		std::string newStr;
 		if (from == to) to = baseStr.size() - to;
 		if (from < 0) from = baseStr.size() + from;
@@ -133,9 +119,21 @@ namespace Strings {
 		if (step == 0) step = 1;
 		if (from > to) step = -step;
 		if (to > baseStr.size()) to = baseStr.size();
-		for (int i = from; (from < to) ? (i < to) : (i > to); i += step) {
+		for (size_t i = from; (from < to) ? (i < to) : (i > to); i += step) {
 			newStr += baseStr[i];
 		}
+		return newStr;
+	}
+
+	// Slice the string as Python, but step is always 1. 
+	// Include head without tail. 
+	std::string slice1(const std::string& baseStr, size_t from = 0, size_t to = 0) {
+		if (from == to) to = baseStr.size() - to;
+		if (from < 0) from = baseStr.size() + from;
+		if (to <= 0) to = baseStr.size() + to;
+		if (from > to) return "";
+		if (to > baseStr.size()) to = baseStr.size();
+		std::string newStr(baseStr.data()+from, to-from);
 		return newStr;
 	}
 
@@ -143,37 +141,13 @@ namespace Strings {
 	std::string replace(const std::string& baseStr, const std::string& from, const std::string& to) {
 		if (baseStr.size() < from.size()) return baseStr;
 		std::string output;
-		const int cnt = count(baseStr, from);
-		const int baseLen = baseStr.size();
-		const int fromLen = from.size();
-		const int toLen = to.size();
-		int cur = 0, curLast = 0;
-		for (int i = 0; i < baseLen; i++) {
-			for (int j = 0; j < from.size(); j++) {
-				if ((i + j) > baseLen) break;
-				if (baseStr[i + j] != from[j]) {
-					output += baseStr[i];
-					break;
-				}
-				if (j == fromLen - 1) {
-					output += to;
-					i += j;
-					break;
-				}
-			}
-		}
-		return output;
-	}
-	std::wstring replace(const std::wstring& baseStr, const std::wstring& from, const std::wstring& to) {
-		if (baseStr.size() < from.size()) return baseStr;
-		std::wstring output;
-		const int cnt = count(baseStr, from);
-		const int baseLen = baseStr.size();
-		const int fromLen = from.size();
-		const int toLen = to.size();
-		int cur = 0, curLast = 0;
-		for (int i = 0; i < baseLen; i++) {
-			for (int j = 0; j < from.size(); j++) {
+		const size_t cnt = count(baseStr, from);
+		const size_t baseLen = baseStr.size();
+		const size_t fromLen = from.size();
+		const size_t toLen = to.size();
+		size_t cur = 0, curLast = 0;
+		for (size_t i = 0; i < baseLen; i++) {
+			for (size_t j = 0; j < from.size(); j++) {
 				if ((i + j) > baseLen) break;
 				if (baseStr[i + j] != from[j]) {
 					output += baseStr[i];
@@ -196,24 +170,23 @@ namespace Strings {
 			output.push_back(baseStr);
 			return output;
 		}
-		const int cnt = count(baseStr, sep);
-		const int baseLen = baseStr.size();
-		const int sepLen = sep.size();
-		int cur = 0, curLast = 0;
+		const size_t cnt = count(baseStr, sep);
+		const size_t baseLen = baseStr.size();
+		const size_t sepLen = sep.size();
+		size_t cur = 0, curLast = 0;
 		std::string tmp2;
-		for (int i = 0; i < baseLen; i++) {
-			for (int j = 0; j < sepLen; j++) {
+		for (size_t i = 0; i < baseLen; i++) {
+			for (size_t j = 0; j < sepLen; j++) {
 				if ((i + j) > baseLen) break;
-				if (baseStr[i + j] != sep[j]) {
+				if (baseStr[i+j] != sep[j]) {
 					tmp2 += baseStr[i];
 					break;
 				}
-				if (j == sepLen - 1) {
+				if (j+1 == sepLen) {
 					output.push_back(tmp2);
 					tmp2 = "";
 					i += j;
 					break;
-
 				}
 			}
 		}
@@ -226,7 +199,7 @@ namespace Strings {
 		if (vec.size() == 0) return "";
 		std::string output;
 		output += vec[0];
-		;	for (int i = 1; i < vec.size(); i++) {
+		for (size_t i = 1; i < vec.size(); i++) {
 			output += joiner;
 			output += vec[i];
 		}
@@ -236,15 +209,15 @@ namespace Strings {
 	// Get the string between two strings in the string. 
 	std::string between(const std::string& baseStr, const std::string& start, const std::string& end) {
 		std::string output = baseStr;
-		std::vector<int> startPos = find(baseStr, start);
+		std::vector<size_t> startPos = find(baseStr, start);
 		if (start == "" || startPos.size() == 0);
 		else {
-			output = slice(output, startPos[0] + start.size(), output.size());
+			output = slice1(output, startPos[0] + start.size(), output.size());
 		}
-		std::vector<int> endPos = find(output, end);
+		std::vector<size_t> endPos = find(output, end);
 		if (end == "" || endPos.size() == 0);
 		else {
-			output = slice(output, 0, endPos[0]);
+			output = slice1(output, 0, endPos[0]);
 
 		}
 		return output;
@@ -254,7 +227,7 @@ namespace Strings {
 	bool startsWith(const std::string& str, const std::string& substr) {
 		if (str.size() < substr.size()) return false;
 		if (str == substr) return true;
-		for (int i = 0; i < substr.size(); i++) {
+		for (size_t i = 0; i < substr.size(); i++) {
 			if (substr[i] != str[i]) return false;
 		}
 		return true;
@@ -263,7 +236,7 @@ namespace Strings {
 	// Format the string of a directory. 
 	std::string formatDirStr(const std::string& path) {
 		std::string o = path;
-		for (int i = 0; i < o.size(); i++) {
+		for (size_t i = 0; i < o.size(); i++) {
 			if (o[i] == O_PATHSEP[0]) {
 				o[i] = PATHSEP[0];
 			}
@@ -271,9 +244,9 @@ namespace Strings {
 		while (count(o, DPATHSEP)) {
 			o = replace(o, DPATHSEP, PATHSEP);
 		}
-		std::vector<int> pos = find(o, ":");
+		std::vector<size_t> pos = find(o, ":");
 		if (pos.size() != 0) {
-			int p = pos[0];
+			size_t p = pos[0];
 			o[p] = '?';
 			o = replace(o, ":", "");
 			o[p] = ':';

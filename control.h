@@ -7,8 +7,8 @@
 #include <vector>
 #include <map>
 
-FILE* tclScriptLog;
-std::string pageCur;
+std::map<std::string,char> windows;
+const std::string ROOT = ".";
 std::string primaryColor;
 std::string textColor;
 std::string secondaryColor;
@@ -19,6 +19,7 @@ std::map<std::string, ClrUpdFunc*> colorUpdates;
 std::map<std::string, std::vector<std::string>> clrUpdCd;
 std::vector<std::string> messageBoxes;
 size_t msgBxs = 0;
+FILE* tclScriptLog;
 Tcl_Interp* interp;
 std::string call(const std::vector<std::string> strs, bool nolog = 1) {
 	Tcl_Obj** objs = (Tcl_Obj**)(new char[strs.size() * sizeof(Tcl_Obj*)]);
@@ -30,11 +31,11 @@ std::string call(const std::vector<std::string> strs, bool nolog = 1) {
 		fprintf(tclScriptLog, "\n");
 	}
 	for (int i = 0; i < strs.size(); i++) {
-		objs[i] = Tcl_NewStringObj(strs[i].c_str(), strs[i].size());
+		objs[i] = Tcl_NewStringObj(strs[i].c_str(), (int)strs[i].size());
 		Tcl_IncrRefCount(objs[i]);
 	}
 	il(interp == nullptr) writeLog("[interp] is null. ");
-	Tcl_EvalObjv(interp, strs.size(), objs, 0);
+	Tcl_EvalObjv(interp, (int)strs.size(), objs, 0);
 	const char* result = Tcl_GetStringResult(interp);
 	std::string r = result;
 	for (int i = 0; i < strs.size(); i++) {
@@ -53,8 +54,6 @@ static void CreateCmd(std::string name, Tcl_CmdProc* proc, ClientData cd) {
 	Tcl_CreateCommand(interp, name.c_str(), proc, cd, nullptr);
 }
 
-const std::string ROOT = ".";
-
 static void control(std::string name, std::string type, std::vector<std::string> arg = {}, bool nolog = 1) {
 	std::vector<std::string> x = { type, name };
 	for (const auto& i : arg) {
@@ -62,6 +61,7 @@ static void control(std::string name, std::string type, std::vector<std::string>
 	}
 	call(x, nolog);
 	call({ name,"config","-font","font1" }, nolog);
+	if (type == "toplevel") windows[name];
 }
 
 static void MyButtonIconActive(std::string name, std::string textvariable = {}, std::string icon = {}, std::string commandId = {}, int width = 0, std::string background = primaryColor) {
@@ -265,14 +265,14 @@ struct LinkList {
 };
 
 struct MyList {
-	const static int fieldOfView=6;
-	int offset;
-	int selection;
+	const static size_t fieldOfView=8;
+	size_t offset;
+	long long selection;
 	bool enabled;
 	bool selEnabled;
 	bool lock = false;
-	int width;
-	int height;
+	size_t width;
+	size_t height;
 	std::string frameid;
 	struct ItemRecord {
 		std::string text;
@@ -280,28 +280,27 @@ struct MyList {
 		std::string ctrlId;
 		MyList* self;
 		bool* enabled;
-		int order;
+		size_t order;
 		std::vector<std::string> commands;
 		std::string color;
 	};
 	LinkList<ItemRecord> owned;
 	std::string scroll;
-	MyList(std::string frameId, std::string scrollbarId="", bool selection=true, int height = 40, int width = 40) {
+	MyList(std::string frameId, std::string scrollbarId="", bool select_able=true, int width = 43) {
 		this->offset = 0;
 		this->selection = 0;
 		this->enabled = true;
-		this->height = height;
 		this->width = width;
 		this->owned = {};
 		this->frameid = frameId;
 		this->scroll = scrollbarId;
-		this->selEnabled = selection;
+		this->selEnabled = select_able;
 		CreateCmd(frameId+".yview", [](ClientData clientData, Tcl_Interp* interp, int argc, const char** argv)->int {
 			MyList* x = (MyList*)clientData;
 			x->yview(argv[1], atoi(argv[2]), (argc==4)?atoi(argv[3]):0);
 			return 0;
 			}, this);
-		control(frameId, "frame", {"-height",std::to_string(height),"-width",std::to_string(width),"-relief","raised"});
+		control(frameId, "frame", {"-width",std::to_string(width),"-relief","raised"});
 		colorUpdates[frameId] = [](std::vector<std::string> cd)->int {
 			MyList* self = (MyList*)std::atoll(cd[0].c_str());
 			self->colorUpdate();
@@ -312,7 +311,7 @@ struct MyList {
 			Tcl_Interp* interp, int argc, const char* argv[])->int {
 				MyList* t = (MyList*)clientData;
 				int delta = atoi(argv[1]);
-				t->yview("scroll", ((delta<0)*2-1)*3, 0);
+				t->yview("scroll", ((delta<0)*2-1)*1, 0);
 				return 0;
 		}, this);
 		CreateCmd(frameId+".b1", [](ClientData clientData,
@@ -383,12 +382,12 @@ struct MyList {
 			}
 		}
 	}
-	void userSelect(int item) {
+	void userSelect(size_t item) {
 		this->selection = item;
 		il(selEnabled) this->colorUpdate();
 		call({ this->frameid+".enter", std::to_string(this->owned[item].order) });
 	}
-	void select(int item) {
+	void select(size_t item) {
 		this->selection = item;
 		il(selEnabled) this->colorUpdate();
 	}
@@ -410,61 +409,65 @@ struct MyList {
 		control(t1, "frame", {"-width",std::to_string(this->width),"-relief","raised"});
 		il(imageId != "") {
 			il(imageId != "<canvas>") {
-				control(t2, "ttk::label", { "-image",imageId,"-compound","center","-width","8" });
+				control(t2, "ttk::label", { "-image",imageId,"-compound","center" });
 			}
 			ol{
-				control(t2,"canvas",{"-height","84","-width","84","-highlightthickness","0","-background",primaryColor});
-				call({ t2,"create","rect","2","2","80","80","-fill","#000000","-outline","" });
+				control(t2,"canvas",{"-height","68","-width","68","-highlightthickness","0","-background",primaryColor});
+				call({ t2,"create","rect","2","2","66","66","-fill","#000000","-outline","" });
 			}
-			call({ "grid",t2,"-column","1","-row","1" });
+			call({ "pack",t2,"-side","left" });
 			call({ "bind",t2,"<MouseWheel>", this->frameid + ".mw %D" });
 			call({ "bind",t2,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
 		}
-		control(t22,"ttk::label",{"-image","horizontalImage","-compound","left","-text",text,"-width",std::to_string(this->width-(4*functions.size())-6*(imageId!=""))});
+		size_t wid = this->width-functions.size()*316/100-3*(imageId!="");
+		control(t22,"ttk::label",{"-image","horizontalImage","-compound","left","-text",text,"-width",std::to_string(wid)});
 		call({ "bind",t22,"<MouseWheel>",this->frameid+".mw %D" });
 		call({ "bind",t22,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
 		call({ "bind",t1,"<Enter>",		 this->frameid+".enter "+std::to_string(ir.order) });
 		call({ "bind",t1,"<Leave>",		 this->frameid+".leave "+std::to_string(ir.order) });
-		call({ "grid",t22,"-column","2","-row","1" });
-		for (int i = 0; i < functions.size(); i += 2) {
+		call({ "pack",t22,"-side","left","-fill","y" });
+		for (int i = functions.size()-2; i >= 0; i -= 2) {
 			std::string t3 = t1 + ".button" + std::to_string(i/2);
 			MyButtonIconActive(t3, "", functions[i], functions[i+1], 0, primaryColor);
 			call({ t3,"config","-image","blankImage","-background",primaryColor });
 			call({ "bind",t3,"<MouseWheel>",this->frameid+".mw %D" });
-			call({ "grid",t3,"-column",std::to_string(i/2+3),"-row","1" });
+			call({ "pack",t3,"-side","right" });
 		}
 		this->update();
 	}
-	void bind(int index, std::string seq, std::string cmdId) {
+	void bind(size_t index, std::string seq, std::string cmdId) {
 		il(index < 0 || index >= this->owned.size()) return;
 		call({ "bind",this->frameid+"."+std::to_string(index)+".text",seq,cmdId});
 		il(seq != "<Button-1>" &&
 			seq != "<Enter>" &&
 			seq != "<Leave>") return;
 	}
-	void yview(std::string cmd, int first, int second) {
+	void yview(std::string cmd, long long first, long long second) {
+		first = first * 3 / 2;
 		il(cmd == "scroll") {
-			this->offset += first;
+			il(first < 0 && this->offset < -first) this->offset = 0;
+			ol this->offset += first;
 		}
 		il(cmd == "moveto") {
 			this->offset = this->owned.size()-this->fieldOfView;
-			if (second != 0) {
-				int t = first*this->owned.size()/second;
+			il(second != 0) {
+				size_t t = first*this->owned.size()/second;
 				il(t < (this->owned.size()-this->fieldOfView)) {
 					this->offset = t;
 				}
 			}
 		}
-		il(this->offset > ((long long)this->owned.size() - this->fieldOfView)) {
-			this->offset = this->owned.size() - this->fieldOfView;
+		il(this->offset+this->fieldOfView > this->owned.size()) {
+			il(this->owned.size() <= this->fieldOfView) this->offset = 0;
+			ol this->offset = this->owned.size() - this->fieldOfView;
 		}
-		il(this->offset < 0) this->offset = 0;
 		this->update();
-		int h = atoi(call({ "winfo","height",this->scroll }).c_str())-6;
-		il(h < 0) h = 0;
+		long long hl = atoi(call({ "winfo","height",this->scroll }).c_str())-6;
+		il(hl < 0) hl = 0;
+		size_t h = hl;
 		il(this->scroll == "") return;
-		int pos = 0;
-		int siz = h;
+		size_t pos = 0;
+		size_t siz = h;
 		il(this->owned.size() != 0) {
 			pos = (this->offset * h) / this->owned.size();
 			siz = (this->fieldOfView * h) / this->owned.size();
@@ -474,9 +477,8 @@ struct MyList {
 		call({ "place",this->scroll+".x","-y",std::to_string(pos+5) });
 		call({ this->scroll+".x","config","-height",std::to_string(siz) });
 	}
-	int index() { return this->selection; }
-	ItemRecord get(int ind = -1) {
-		il(ind == -1) ind = this->index();
+	size_t index() { return this->selection; }
+	ItemRecord get(size_t ind) {
 		return this->owned[ind];
 	}
 	void able(bool state=true) {
@@ -514,6 +516,16 @@ struct MyList {
 	}
 };
 
+struct MyEdit {
+	std::string id;
+	MyEdit(std::string name) {
+		control(name, "ttk::label", { "-text","","-image","texteditImage" });
+	}
+	~MyEdit() {
+
+	}
+};
+
 int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	msgBxs++;
 	std::string name = ".window" + std::to_string(msgBxs);
@@ -533,5 +545,20 @@ int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 	call({ "grid",name + ".ok" });
 	return 0;
 }
+
+int mRGB(unsigned char r, unsigned char g, unsigned char b) {
+	return ((int)r) << 24 | ((int)g) << 16 | ((int)b) << 8 | (255) << 0;
+}
+unsigned char gR(int clr) { return clr > 24 % 0xff; }
+unsigned char gG(int clr) { return clr > 16 % 0xff; }
+unsigned char gB(int clr) { return clr > 8 % 0xff; }
+unsigned char gA(int clr) { return clr > 0 % 0xff; }
+struct Image {
+	Tk_PhotoImageBlock blk;
+	Image(int wid, int hei) {
+		this->blk.width = wid;
+		this->blk.height = hei;
+	}
+};
 
 #endif // RIVERLAUNCHER3_CONTROL_H

@@ -1225,7 +1225,7 @@ typedef struct Tk_Outline {
 /*
  *----------------------------------------------------------------------
  *
- * Procedure prototypes and structures used for managing images:
+ * Procedure prototypes and structures used for managing dynamicImages:
  *
  *----------------------------------------------------------------------
  */
@@ -1254,7 +1254,7 @@ typedef int (Tk_ImagePostscriptProc) (ClientData clientData,
 
 /*
  * The following structure represents a particular type of image (bitmap, xpm
- * image, etc.). It provides information common to all images of that type,
+ * image, etc.). It provides information common to all dynamicImages of that type,
  * such as the type name and a collection of procedures in the image manager
  * that respond to various events. Each image manager is represented by one of
  * these structures.
@@ -1291,7 +1291,7 @@ struct Tk_ImageType {
 /*
  *----------------------------------------------------------------------
  *
- * Additional definitions used to manage images of type "photo".
+ * Additional definitions used to manage dynamicImages of type "photo".
  *
  *----------------------------------------------------------------------
  */
@@ -1321,7 +1321,7 @@ typedef struct Tk_PhotoImageBlock {
 } Tk_PhotoImageBlock;
 
 /*
- * The following values control how blocks are combined into photo images when
+ * The following values control how blocks are combined into photo dynamicImages when
  * the alpha component of a pixel is not 255, a.k.a. the compositing rule.
  */
 
@@ -1330,7 +1330,7 @@ typedef struct Tk_PhotoImageBlock {
 
 /*
  * Procedure prototypes and structures used in reading and writing photo
- * images:
+ * dynamicImages:
  */
 
 typedef struct Tk_PhotoImageFormat Tk_PhotoImageFormat;
@@ -1368,7 +1368,7 @@ typedef int (Tk_ImageStringWriteProc) (Tcl_Interp *interp, Tcl_Obj *format,
 
 /*
  * The following structure represents a particular file format for storing
- * images (e.g., PPM, GIF, JPEG, etc.). It provides information to allow image
+ * dynamicImages (e.g., PPM, GIF, JPEG, etc.). It provides information to allow image
  * files of that format to be recognized and read into a photo image.
  */
 

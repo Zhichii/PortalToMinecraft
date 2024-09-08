@@ -299,7 +299,7 @@ int execNotThrGetOutInvoke(std::wstring cmd, void* c, const std::wstring& path =
 		return 1;
 	}
 	CloseHandle(hWrite);
-	int n = HCOE.size();
+	size_t n = HCOE.size();
 	HCOE.push_back(hRead);
 	HCOE.push_back(pi.hThread);
 	HCOE.push_back(pi.hProcess);

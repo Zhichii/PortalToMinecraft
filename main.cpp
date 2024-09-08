@@ -1,12 +1,14 @@
 #define STATIC_BUILD
 #define TCL_USE_STATIC_PACKAGES
 #define CPP_TKINTER_SAFE_FUNCTIONS
-#define _CRTDBG_MAP_ALLOC
 #define CURL_STATICLIB
 #define TCL_THREADS
 #define il if
 #define el else if
 #define ol else
+#ifdef _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#endif
 #include <stdlib.h>
 #include <crtdbg.h>
 #include <tcl.h>
@@ -22,6 +24,10 @@
 #include <mutex>
 #include <random>
 #include <curl/curl.h>
+#include <json/json.h>
+#include <json/json_value.cpp>
+#include <json/json_reader.cpp>
+#include <json/json_writer.cpp>
 
 FILE* logFile;
 void writeLog(std::string format, ...) {
@@ -52,7 +58,10 @@ void writeLog(std::string format, ...) {
 #include "net.h"
 #include "thread.h"
 
-int readPNG(png_bytep png_file_data, size_t file_size, png_uint_32& width, png_uint_32& height, png_uint_32& bytesPerRow, png_bytepp output) {
+#ifdef _DEBUG
+#define new new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )
+#endif
+int readPNG(png_bytep png_file_data, size_t file_size, png_uint_32& width, png_uint_32& height, size_t& bytesPerRow, png_bytepp output) {
 	png_bytep stream = png_file_data;
 	bool notpng = png_sig_cmp(png_file_data, 0, file_size);
 	if (notpng) {
@@ -96,7 +105,7 @@ int readPNG(png_bytep png_file_data, size_t file_size, png_uint_32& width, png_u
 	png_read_update_info(png_ptr, info_ptr);
 	bytesPerRow = png_get_rowbytes(png_ptr, info_ptr);
 	(*output) = new png_byte[bytesPerRow * height];
-	for (int i = 0; i < height; i++) {
+	for (png_uint_32 i = 0; i < height; i++) {
 		png_read_row(png_ptr, (*output)+bytesPerRow*i, NULL);
 	}
 	png_read_end(png_ptr, NULL);
@@ -105,6 +114,7 @@ int readPNG(png_bytep png_file_data, size_t file_size, png_uint_32& width, png_u
 }
 
 const std::string contentPaddingStr = "80 0";
+std::string pageCur;
 const int comeAniSz = 11;
 const char* comeAnim[comeAniSz] = { "-680","-560","-320","-200","-40","60","110","130","110","95","80" };
 const int goAniSz = 12;
@@ -142,25 +152,97 @@ void swiPage(std::string page, bool noAnimation) {
 	doingAnim.unlock();
 }
 
-void fillColor(std::string rt) {
-	call({ rt,"config","-background",primaryColor });
-	std::string x = call({ rt,"config","-image" });
-	std::string y = call({ rt,"config","-compound" });
+BOOL dark = 0;
+
+std::vector<std::string> dynamicImages = {
+	"addImage","addImageActive","brightImage","brightImageActive","darkImage","darkImageActive",
+	"editImage","editImageActive","launchImage","launchImageActive",
+	"tabImage","tabImageActive","tabYImage","tabYImageActive"
+};
+void colorPhotos(std::string name, 
+	short r1, short g1, short b1,
+	short r2, short g2, short b2,
+	short r3, short g3, short b3,
+	short r4, short g4, short b4,
+	short r5, short g5, short b5
+) {
+	Tk_PhotoHandle ph = Tk_FindPhoto(interp, name.c_str());
+	Tk_PhotoImageBlock blk;
+	Tk_PhotoGetImage(ph, &blk);
+	unsigned char* stream__ = blk.pixelPtr;
+	if (name.ends_with("Active"))
+		for (int i = 0; i < blk.height * blk.width; i++) {
+			il (stream__[blk.offset[0]] == 0x48 &&
+				stream__[blk.offset[1]] == 0x48 &&
+				stream__[blk.offset[2]] == 0x48) {
+				stream__[blk.offset[0]] = r3;
+				stream__[blk.offset[1]] = g3;
+				stream__[blk.offset[2]] = b3;
+			}
+			el (stream__[blk.offset[0]] == 0x7f &&
+				stream__[blk.offset[1]] == 0x7f &&
+				stream__[blk.offset[2]] == 0x7f) {
+				stream__[blk.offset[0]] = r4;
+				stream__[blk.offset[1]] = g4;
+				stream__[blk.offset[2]] = b4;
+			}
+			el (stream__[blk.offset[0]] == 0xff &&
+				stream__[blk.offset[1]] == 0xff &&
+				stream__[blk.offset[2]] == 0xff) {
+				stream__[blk.offset[0]] = r5;
+				stream__[blk.offset[1]] = g5;
+				stream__[blk.offset[2]] = b5;
+			}
+			stream__ += blk.pixelSize;
+		}
+	else
+		for (int i = 0; i < blk.height * blk.width; i++) {
+			il (stream__[blk.offset[0]] == 0x48 &&
+				stream__[blk.offset[1]] == 0x48 &&
+				stream__[blk.offset[2]] == 0x48) {
+				stream__[blk.offset[0]] = r1;
+				stream__[blk.offset[1]] = g1;
+				stream__[blk.offset[2]] = b1;
+			}
+			el (stream__[blk.offset[0]] == 0x7f &&
+				stream__[blk.offset[1]] == 0x7f &&
+				stream__[blk.offset[2]] == 0x7f) {
+				stream__[blk.offset[0]] = r2;
+				stream__[blk.offset[1]] = g2;
+				stream__[blk.offset[2]] = b2;
+			}
+			el (stream__[blk.offset[0]] == 0xff &&
+				stream__[blk.offset[1]] == 0xff &&
+				stream__[blk.offset[2]] == 0xff) {
+				stream__[blk.offset[0]] = r5;
+				stream__[blk.offset[1]] = g5;
+				stream__[blk.offset[2]] = b5;
+			}
+			stream__ += blk.pixelSize;
+		}
+	Tk_PhotoPutBlock(interp, ph, &blk, 0, 0, blk.width, blk.height, TK_PHOTO_COMPOSITE_SET);
+}
+
+void fillColor(std::string name) {
+	call({ name,"config","-background",primaryColor });
+	std::string x = call({ name,"config","-image" });
+	std::string y = call({ name,"config","-compound" });
+	bool chFore = false;
+	for (const auto& i : dynamicImages) il("-image image Image {} "+i==x) { chFore=true; break; }
 	il(x != "unknown option \"-image\"" && x != "-image image Image {} {}") {
-		il(Strings::count(y, "center") == 0) call({ rt,"config","-foreground",textColor });
-	} ol call({ rt,"config","-foreground",textColor });
-	il(Strings::count(y,"center")==0) call({ rt,"config","-foreground",textColor });
-	std::string a = call({ "winfo","children",rt });
-	if (a == "") return;
-	std::vector<std::string> children = Strings::split(a, " ");
-	for (const auto& i : children) fillColor(i);
+		il(Strings::count(y, "center") == 0) chFore = true;
+	} ol chFore = true;
+	il(Strings::count(y,"center")==0) chFore = true;
+	il (chFore) call({ name,"config","-foreground",textColor });
+	std::string children = call({ "winfo","children",name });
+	if (children == "") return;
+	std::vector<std::string> childrenList = Strings::split(children, " ");
+	for (const auto& i : childrenList) fillColor(i);
 }
 
 void colorUpdate() {
 	fillColor(ROOT);
-	for (const auto& i : colorUpdates) {
-		i.second(clrUpdCd[i.first]);
-	}
+	for (const auto& i : colorUpdates) i.second(clrUpdCd[i.first]);
 }
 
 std::vector<std::string> listVersion() {
@@ -182,13 +264,59 @@ std::vector<std::string> listVersion() {
 				reader.parse(jsonFile, info);
 				std::string pre = "?:";
 				il(info["type"] == "release") pre = "r:";
-				el (info["type"] == "snapshot") pre = "s:";
+				el(info["type"] == "snapshot") pre = "s:";
 				ol pre = "x:";
-				versions.push_back(pre + info["id"].asString());
+				std::string mod = "vanil:";
+				il(info["mainClass"] == "net.fabricmc.loader.impl.launch.knot.KnotClient") {
+					mod = "fabri:";
+				}
+				el(info["mainClass"] == "net.featherloader.FeatherLoader") {
+					mod = "fealo:";
+				}
+				el(info["mainClass"] == "cpw.mods.modlauncher.Launcher" ||
+				   info["mainClass"] == "net.minecraft.launchwrapper.Launch") {
+					il(info.isMember("arguments")) {
+						for (const auto& i : info["arguments"]["game"]) {
+							il(i.type() != Json::stringValue) continue;
+							il(i.asString() == "--fml.forgeVersion") {
+								il(mod == "optif:") mod = "optfo:";
+								el(mod == "vanil:") mod = "forge:";
+							}
+							il(i.asString() == "optifine.OptiFineTweaker") {
+								il(mod == "forge:") mod = "optfo:";
+								el(mod == "vanil:") mod = "optif:";
+							}
+						}
+					}
+					el(info.isMember("minecraftArguments")) {
+						il(Strings::count(info["minecraftArguments"].asString(), "--tweakClass optifine.OptiFineTweaker")) {
+							mod = "optif:";
+						}
+						il(Strings::count(info["minecraftArguments"].asString(), "--tweakClass cpw.mods.fml.common.launcher.FMLTweaker")) {
+							il(mod == "optif:") mod = "optfo:";
+							ol mod = "forge:";
+						}
+					}
+				}
+				el(info["mainClass"] == "cpw.mods.bootstraplauncher.BootstrapLauncher") {
+					for (const auto& i : info["arguments"]["game"]) {
+						if (i.type() != Json::stringValue) continue;
+						il(i.asString() == "--fml.neoForgeVersion") {
+							il(mod == "optif:") mod = "optne:";
+							el(mod == "vanil:") mod = "neofo:";
+						}
+						il(i.asString() == "optifine.OptiFineTweaker") {
+							il(mod == "neofo:") mod = "optne:";
+							el(mod == "vanil:") mod = "optif:";
+						}
+					}
+				}
+				versions.push_back(pre + mod + info["id"].asString());
 				jsonFile.close();
 				writeLog("Initialized version \"%s\". ", info["id"].asCString());
 			}
 			catch (std::exception e) {
+				versions.push_back("x:xxxxx:"+ v.path().filename().string());
 				writeLog("Listing versions: Failed to initialize \"%s\": %s", Strings::ws2s(jsonPath).c_str(), e.what());
 			}
 		}
@@ -198,8 +326,11 @@ std::vector<std::string> listVersion() {
 
 int launchGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	std::thread thr([argv]()->int {
-		std::wstring av = Strings::s2ws(argv[1]);
-		writeLog("Launching game \"%s\"...", argv[1]);
+		char* a = (char*)argv[1];
+		size_t n = strtoull(argv[1], nullptr, 10);
+		std::string name = Strings::slice1(listVersion()[n], 8);
+		std::wstring av = Strings::s2ws(name);
+		writeLog("Launching game \"%s\"...", name);
 		VersionInfo* target = nullptr;
 		std::string versionDir = rdata("GameDir").asString() + "versions";
 		std::wstring jsonPath = Strings::s2ws(versionDir) + LPATHSEP + av + LPATHSEP + av + L".json";
@@ -238,13 +369,13 @@ int launchGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 				record["crashReport"] = "1";
 			il(o.starts_with("#@!@# Game crashed! Crash report saved to: #@!@#"))
 				record["reportSaved"] = "1";
-			il(Strings::slice(o, 11) == "[Client thread/INFO]: Stopping!")
+			il(Strings::slice1(o, 11) == "[Client thread/INFO]: Stopping!")
 				record["normalStopping"] = "1";
-			il(Strings::slice(o, 13).starts_with("[main] ERROR FabricLoader/")) {
+			il(Strings::slice1(o, 13).starts_with("[main] ERROR FabricLoader/")) {
 				record["isFabric"] = "1";
 				record["fabricError"] = Strings::between(o, "[main] ERROR FabricLoader/", "\r");
 			}
-			il(Strings::slice(o, 13).starts_with("[main] ERROR FabricLoader - ")) {
+			il(Strings::slice1(o, 13).starts_with("[main] ERROR FabricLoader - ")) {
 				record["isFabric"] = "1";
 				record["fabricError"] = Strings::between(o, "[main] ERROR FabricLoader - ", "\r");
 			}
@@ -277,11 +408,43 @@ int pageGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	size_t n = 0;
 	for (auto& i : versions) {
 		std::string image;
-		il(i[0]=='r') image = "releaseImage";
-		il(i[0]=='s') image = "snapshotImage";
-		il(i[0]=='x') image = "brokenImage";
-		std::string id = Strings::slice(i, 2);
-		versionList->add(id, image, {"launchImage","launch "+id,"editImage",""});
+		std::string mod = Strings::slice1(i, 2, 7);
+		il(i[0] == 'x') image = "brokenImage";
+		if (mod == "vanil") {
+			mod = "Vanilla";
+			il(i[0] == 'r') image = "releaseImage";
+			il(i[0] == 's') image = "snapshotImage";
+		}
+		if (mod == "fabri") {
+			mod = "Fabric";
+			image = "fabricImage";
+		}
+		if (mod == "forge") {
+			mod = "Forge";
+			image = "forgeImage";
+		}
+		if (mod == "optfo") {
+			mod = "Forge + OptiFine";
+			image = "forgeImage";
+		}
+		if (mod == "neofo") {
+			mod = "NeoForge";
+			image = "neoforgeImage";
+		}
+		if (mod == "optne") {
+			mod = "NeoForge + OptiFine";
+			image = "neoforgeImage";
+		}
+		if (mod == "optif") {
+			mod = "OptiFine";
+			image = "optifineImage";
+		}
+		if (mod == "fealo") {
+			mod = "FeatherLoader";
+			image = "featherImage";
+		}
+		std::string id = Strings::slice1(i, 8);
+		versionList->add(id+"\n      "+mod, image, {"launchImage","launch " + std::to_string(n),"editImage",""});
 		n++;
 	}
 	versionList->yview("", 0, 0);
@@ -303,19 +466,16 @@ int pageMods(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 }
 
 int addAccount(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
-	msgBxs++;
-	std::string name = ".window" + std::to_string(msgBxs);
-	messageBoxes.push_back(name);
-	control(name, "toplevel");
+	control(".windowAddAccount", "toplevel");
 	std::string title = "dialog";
 	std::string content = "accounts.add.ask_type";
-	call({ "wm","title",name,currentLanguage->localize(title) });
-	control(name + ".text", "ttk::label", { "-text",currentLanguage->localize(content) });
-	control(name + ".ok", "ttk::button", { "-text",currentLanguage->localize("ok") });
-	call({ name + ".ok","config","-command","destroy " + name });
-	call({ "grid",name + ".text" });
-	call({ "grid",name + ".ok" });
-	fillColor(name);
+	call({ "wm","title",".windowAddAccount",currentLanguage->localize(title)});
+	control(".windowAddAccount.text", "ttk::label", { "-text",currentLanguage->localize(content) });
+	control(".windowAddAccount.ok", "ttk::button", { "-text",currentLanguage->localize("ok") });
+	call({ ".windowAddAccount.ok","config","-command","destroy .windowAddAccount"});
+	call({ "grid",".windowAddAccount.text" });
+	call({ "grid",".windowAddAccount.ok" });
+	fillColor(".windowAddAccount");
 	return 0;
 }
 
@@ -350,7 +510,7 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 			}
 			png_uint_32 width;
 			png_uint_32 height;
-			png_uint_32 bytesPerRow;
+			size_t bytesPerRow;
 			png_byte* data;
 			int a = readPNG(png_file, file_size, width, height, bytesPerRow, &data);
 			if (a == 0) {
@@ -365,8 +525,8 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 						clr[5] = toHex(data[i*bytesPerRow+j*4+2]/16 % 16);
 						clr[6] = toHex(data[i*bytesPerRow+j*4+2]/1 % 16);
 						call({ accountList->owned[accountList->owned.size()-1].ctrlId+".image","create","rect",
-							std::to_string(2+(i-8)*10),   std::to_string(2+(j-8)*10),
-							std::to_string(2+(i-8)*10+10),std::to_string(2+(j-8)*10+10),
+							std::to_string(2+(i-8)*8),  std::to_string(2+(j-8)*8),
+							std::to_string(2+(i-8)*8+8),std::to_string(2+(j-8)*8+8),
 							"-fill",clr,"-outline","" });
 					}
 				}
@@ -432,13 +592,55 @@ int pageLang(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	return 0;
 }
 
+void createBtnImage(std::string name) {
+
+}
+
+void createPhotos() {
+	// Icons. 
+	call({ "image","create","photo","releaseImage","-file","assets\\icon\\release.png" });
+	call({ "image","create","photo","snapshotImage","-file","assets\\icon\\snapshot.png" });
+	call({ "image","create","photo","oldImage","-file","assets\\icon\\old.png" });
+	call({ "image","create","photo","fabricImage","-file","assets\\icon\\fabric.png" });
+	call({ "image","create","photo","optifineImage","-file","assets\\icon\\optifine.png" });
+	call({ "image","create","photo","forgeImage","-file","assets\\icon\\forge.png" });
+	call({ "image","create","photo","neoforgeImage","-file","assets\\icon\\neoforge.png" });
+	call({ "image","create","photo","featherImage","-file","assets\\icon\\feather.png" });
+	call({ "image","create","photo","brokenImage","-file","assets\\icon\\broken.png" });
+	call({ "image","create","photo","titleImage","-file","assets\\icon.png" });
+	// Controls v2. 
+	call({ "image","create","photo","tabImage","-file","assets\\ctrl\\tab.png" });
+	call({ "image","create","photo","tabImageActive","-file","assets\\ctrl\\tab.png" });
+	call({ "image","create","photo","tabYImage","-file","assets\\ctrl\\tabY.png" });
+	call({ "image","create","photo","tabYImageActive","-file","assets\\ctrl\\tabY.png" });
+	// Controls v3. 
+	call({ "image","create","photo","buttonxImage","-file","assets\\control\\buttonx.png" });
+	call({ "image","create","photo","buttonxImageActive","-file","assets\\control\\buttonx.png" });
+	// Icon Buttons. 
+	call({ "image","create","photo","launchImage","-file","assets\\iconbutton\\launch.png" });
+	call({ "image","create","photo","launchImageActive","-file","assets\\iconbutton\\launch.png" });
+	call({ "image","create","photo","editImage","-file","assets\\iconbutton\\edit.png" });
+	call({ "image","create","photo","editImageActive","-file","assets\\iconbutton\\edit.png" });
+	call({ "image","create","photo","addImage","-file","assets\\iconbutton\\add.png" });
+	call({ "image","create","photo","addImageActive","-file","assets\\iconbutton\\add.png" });
+	call({ "image","create","photo","brightImage","-file","assets\\iconbutton\\bright.png" });
+	call({ "image","create","photo","brightImageActive","-file","assets\\iconbutton\\bright.png" });
+	call({ "image","create","photo","darkImage","-file","assets\\iconbutton\\dark.png" });
+	call({ "image","create","photo","darkImageActive","-file","assets\\iconbutton\\dark.png" });
+	// Misc. 
+	call({ "image","create","photo","blankImage","-file","assets\\misc\\blank.png" });
+	call({ "image","create","photo","horizontalImage","-file","assets\\misc\\horizontal.png" });
+	call({ "image","create","photo","steveImage","-file","assets\\misc\\steve.png" });
+}
+
 Tk_Window mainWin;
 std::string geometry;
 Tcl_ThreadId mainThr;
+HWND hWnd;
 
 int main() {
 
-	if (mkdir("RvL\\") != 0 && errno == ENOENT) {
+	il (mkdir("RvL\\") != 0 && errno == ENOENT) {
 		MessageBoxA(nullptr, "Failed to make dir [RvL\\]. ", "Error", MB_ICONERROR | MB_OK);
 		return 0;
 	}
@@ -485,44 +687,21 @@ int main() {
 
 	call({ "wm","iconbitmap",ROOT,"assets\\icon.ico" });
 	call({ "wm","title",ROOT,currentLanguage->localize("title") });
-	HWND hwnd = GetActiveWindow();
 	BOOL value = TRUE;
 	mainWin = Tk_MainWindow(interp);
-	writeLog("%lld %lld %lld", hwnd, Tk_GetHWND(Tk_WindowId(mainWin)), Tk_WindowId(mainWin));
-	DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
-	call({ "wm","geometry",ROOT,rdata("Geometry").asString() });
+	call({ "update" });
+	windows[ROOT];
+	DWORD light_;
+	DWORD DWORD_sz = sizeof(DWORD);
+	RegGetValueA(HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &light_, &DWORD_sz);
+	dark = light_; // This will be inverted later. 
+	//hWnd = GetParent((HWND)strtoull(call({ "winfo","id",ROOT }).c_str(), nullptr, 16));
+	//writeLog("HWND: %u", hWnd);
+	//SetWindowLongA(hWnd, GWL_STYLE, GetWindowLong(hWnd, GWL_STYLE) & ~WS_CAPTION & ~WS_THICKFRAME);
+	//UpdateWindow(hWnd);
 
 	writeLog("Creating images. ");
-	// Icons. 
-	call({ "image","create","photo","releaseImage","-file","assets\\icon\\release.png" });
-	call({ "image","create","photo","snapshotImage","-file","assets\\icon\\snapshot.png" });
-	call({ "image","create","photo","oldImage","-file","assets\\icon\\old.png" });
-	call({ "image","create","photo","fabricImage","-file","assets\\icon\\fabric.png" });
-	call({ "image","create","photo","optifineImage","-file","assets\\icon\\optifine.png" });
-	call({ "image","create","photo","titleImage","-file","assets\\icon.png" });
-	// Controls v1. 
-	call({ "image","create","photo","buttonImage","-file","assets\\control\\button.png" });
-	call({ "image","create","photo","buttonImageActive","-file","assets\\control\\buttonActive.png" });
-	// Controls. 
-	call({ "image","create","photo","tabImage","-file","assets\\ctrl\\tab.png" });
-	call({ "image","create","photo","tabImageActive","-file","assets\\ctrl\\tabActive.png" });
-	call({ "image","create","photo","tabYImage","-file","assets\\ctrl\\tabY.png" });
-	call({ "image","create","photo","tabYImageActive","-file","assets\\ctrl\\tabYActive.png" });
-	// Icon Buttons. 
-	call({ "image","create","photo","launchImage","-file","assets\\iconbutton\\launch.png" });
-	call({ "image","create","photo","launchImageActive","-file","assets\\iconbutton\\launch_active.png" });
-	call({ "image","create","photo","editImage","-file","assets\\iconbutton\\edit.png" });
-	call({ "image","create","photo","editImageActive","-file","assets\\iconbutton\\edit_active.png" });
-	call({ "image","create","photo","addImage","-file","assets\\iconbutton\\add.png" });
-	call({ "image","create","photo","addImageActive","-file","assets\\iconbutton\\add_active.png" });
-	call({ "image","create","photo","brightImage","-file","assets\\iconbutton\\bright.png" });
-	call({ "image","create","photo","brightImageActive","-file","assets\\iconbutton\\bright_active.png" });
-	call({ "image","create","photo","darkImage","-file","assets\\iconbutton\\dark.png" });
-	call({ "image","create","photo","darkImageActive","-file","assets\\iconbutton\\dark_active.png" });
-	// Misc. 
-	call({ "image","create","photo","blankImage","-file","assets\\misc\\blank.png" });
-	call({ "image","create","photo","horizontalImage","-file","assets\\misc\\horizontal.png" });
-	call({ "image","create","photo","steveImage","-file","assets\\misc\\steve.png" });
+	createPhotos();
 	// Font
 	if (AddFontResourceExA("assets\\font.otf", FR_PRIVATE, 0) != 0) {
 		writeLog("Font successfully added. ");
@@ -530,32 +709,75 @@ int main() {
 	else writeLog("Font adding failed. ");
 	call({ "font","create","font1","-family","Source Han Sans CN","-size","10","-weight","bold" });
 
-	primaryColor = "#1f1f1f";
+	primaryColor = "#000000";
 	secondaryColor = "#000000";
-	textColor = "#ffffff";
-	hoverColor = "#4c4c4c";
-	selectColor = "#353535";
+	textColor = "#000000";
+	hoverColor = "#000000";
+	selectColor = "#000000";
 	CreateCmd("chTheme", [](ClientData clientData,
 		Tcl_Interp* interp, int argc, const char* argv[])->int {
-			il(primaryColor == "#e6e6e6") {
+			short rO = 0x2b, gO = 0x82, bO = 0x82; // Origin
+			short rB=rO*1.2, gB=gO*1.2, bB=bO*1.2; // Brighter
+			if (rB > 0xff) rB = 0xff;
+			if (gB > 0xff) gB = 0xff;
+			if (bB > 0xff) bB = 0xff;
+			short rHD=rO-50,	gHD=gO-50,	bHD=bO-50;	// Hover Dark
+			if (rHD < 0x00) rHD = 0x00;
+			if (gHD < 0x00) gHD = 0x00;
+			if (bHD < 0x00) bHD = 0x00;
+			short rHL=rO+114,	gHL=gO+114,	bHL=bO+114;	// Hover Light #ddf4f4
+			if (rHL > 0xff) rHL = 0xff;
+			if (gHL > 0xff) gHL = 0xff;
+			if (bHL > 0xff) bHL = 0xff;
+			createPhotos();
+			il(dark) {
+				primaryColor = "#ffffff";
+				secondaryColor = "#e6e6e6";
+				textColor = "#000000";
+				hoverColor = "#cfcfcf";
+				selectColor = "#b8b8b8";
+				for (const auto& i : dynamicImages) colorPhotos(i,
+					0xf0, 0xf0, 0xf0,
+					  rO,   gO,   bO,
+					 rHL,  gHL,  bHL,
+					  rB,   gB,   bB,
+					  rO,   gO,   bO
+				);
+				dark = FALSE;
+			}
+			ol{
 				primaryColor = "#1f1f1f";
 				secondaryColor = "#000000";
 				textColor = "#ffffff";
 				hoverColor = "#4c4c4c";
 				selectColor = "#353535";
-			}
-			ol {
-				primaryColor = "#e6e6e6";
-				secondaryColor = "#ffffff";
-				textColor = "#000000";
-				hoverColor = "#cfcfcf";
-				selectColor = "#b8b8b8";
+				for (const auto& i : dynamicImages) colorPhotos(i,
+					0x33, 0x33, 0x33,
+					  rO,   gO,   bO,
+					 rHD,  gHD,  bHD,
+					  rB,   gB,   bB,
+					  rB,   gB,   bB
+				);
+				dark = TRUE;
 			}
 			colorUpdate();
-			std::string img = (primaryColor=="#e6e6e6")?"brightImage":"darkImage";
+			std::string img = (primaryColor=="#ffffff")?"brightImage":"darkImage";
 			call({ "bind",".themeButton","<Enter>",".themeButton config -image "+img+"Active" });
 			call({ "bind",".themeButton","<Leave>",".themeButton config -image "+img });
 			call({ ".themeButton","config","-image",img+"Active" });
+			for (const auto& i : windows) {
+				std::string name = i.first;
+				HWND hWnd = GetParent((HWND)strtoull(call({ "winfo","id",name }).c_str(),nullptr,16));
+				DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+				std::string curGeo = call({ "wm","geometry",name });
+				std::string curGeo2 = curGeo;
+				size_t pos = Strings::find(curGeo, "+")[0]-1;
+				if (curGeo2[pos]=='0') curGeo2[pos] = '1';
+				else curGeo2[pos]--;
+				call({ "wm","geometry",name,curGeo2 });
+				call({ "update" });
+				call({ "wm","geometry",name,curGeo });
+			}
 			return 0;
 		}, 0);
 
@@ -672,8 +894,8 @@ int main() {
 	CreateCmd("swiSett", pageSett,        0);
 	CreateCmd("swiMods", pageMods,        0);
 	CreateCmd("swiLang", pageLang, langList);
-	MyButtonIconActive(".themeButton", "", "darkImage", "chTheme");
-	call({ "place",".themeButton","-x","-89","-y","0","-relx","1" });
+	MyButtonIconActive(".themeButton", "", "", "chTheme");
+	call({ "place",".themeButton","-x","-68","-y","0","-relx","1" }); // -67 = -64-4
 
 	if (isExists("assets\\background.png")) {
 		call({ "image","create","photo","background","-file","assets\\background.png" });
@@ -693,7 +915,11 @@ int main() {
 	pageSett(       0, interp, -1, nullptr);
 	pageMods(       0, interp, -1, nullptr);
 	pageLang(langList, interp, -1, nullptr);
-	colorUpdate();
+	call({ "update" });
+	call({ "wm","geometry",ROOT,"0x0+0+0" });
+	call({ "chTheme" });
+	call({ "wm","geometry",ROOT,rdata("Geometry").asString() });
+	call({ ".themeButton","config","-image",(primaryColor=="#ffffff")?"brightImage":"darkImage" });
 	call({ "update" });
 	std::string t = ".pageGame";
 	pageGame(gameList, interp, -1, nullptr);
@@ -717,7 +943,7 @@ int main() {
 	//			std::string image;
 	//			il(i[0]=='r')	image = "releaseImage";
 	//			il(i[0]=='s')	image = "snapshotImage";
-	//			std::string id = Strings::slice(i, 2);
+	//			std::string id = Strings::slice1(i, 2);
 	//			versionList->add(id, image, {"launchImage","launch " + id,"editImage",""});
 	//			n++;
 	//		}
@@ -735,6 +961,7 @@ int main() {
 	call({ "wm","protocol",".","WM_SAVE_YOURSELF","on_close" });
 
 	// Threads
+	mainThr = Tcl_GetCurrentThread();
 	std::thread thr([]()->int {
 		writeLog("Trying to get the version manifest...");
 		char* dat;
@@ -749,22 +976,23 @@ int main() {
 		return 0;
 	});
 	thr.detach();
-	auto evSetup = [](ClientData clientData, int flags) {
-
-	};
-	auto evCheck = [](ClientData clientData, int flags) {
-
-	};
+	auto evSetup = [](ClientData clientData, int flags) { };
+	auto evCheck = [](ClientData clientData, int flags) { };
 	Tcl_CreateEventSource(evSetup, evCheck, 0);
-	Tcl_ThreadId gameUpdThread;	Tcl_CreateThread(&gameUpdThread, [](ClientData clientData)->unsigned {
-		Tcl_Event* ev = (Tcl_Event*)Tcl_Alloc(sizeof(ThreadEvent));
-		ev->proc = [](Tcl_Event* evPtr, int flags)->int {
-
-			return 0;
-		};
-		Tcl_ThreadQueueEvent(mainThr, ev, TCL_QUEUE_HEAD);
-		return 0;
-	}, 0, TCL_THREAD_STACK_DEFAULT, TCL_THREAD_NOFLAGS);
+	//Tcl_ThreadId gameUpdThread;	Tcl_CreateThread(&gameUpdThread, [](ClientData clientData)->unsigned {
+	//	ThreadEvent* ev = (ThreadEvent*)Tcl_Alloc(sizeof(ThreadEvent));
+	//	ev->cd = clientData;
+	//	Tcl_Event* ev_ = (Tcl_Event*)ev;
+	//	ev_->proc = [](Tcl_Event* evPtr, int flags)->int {
+	//		ThreadEvent* ev = (ThreadEvent*)evPtr;
+	//		writeLog("%d yyy", ev->cd);
+	//		return 0;
+	//	};
+	//	Tcl_ThreadQueueEvent(mainThr, ev_, TCL_QUEUE_HEAD);
+	//	return 0;
+	//}, (ClientData)114514, TCL_THREAD_STACK_DEFAULT, TCL_THREAD_NOFLAGS);
+	//int gameUpdThrRet;
+	//Tcl_JoinThread(gameUpdThread, &gameUpdThrRet);
 
 	Tk_MainLoop();
 

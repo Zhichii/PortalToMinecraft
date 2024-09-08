@@ -71,10 +71,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);include</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);include;include\tcltk</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);include</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);include;include/tcltk/</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -154,10 +154,12 @@
     <ClInclude Include="control.h" />
     <ClInclude Include="data.h" />
     <ClInclude Include="help.h" />
+    <ClInclude Include="include\json.h" />
     <ClInclude Include="language.h" />
     <ClInclude Include="net.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="strings.h" />
+    <ClInclude Include="theme.h" />
     <ClInclude Include="thread.h" />
     <ClInclude Include="versioninfo.h" />
   </ItemGroup>

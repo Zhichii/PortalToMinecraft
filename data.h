@@ -67,10 +67,10 @@ void initData() {
 		std::string s = data["Accounts"].asString();
 		r.parse(s, data["Accounts"]);
 		if (data["Accounts"].type() != Json::arrayValue) data["Accounts"] = Json::arrayValue;
-		for (int i = 0; i < data["Accounts"].size(); i++) {
-			if (!data["Accounts"][i].isMember("userType")) data["Accounts"][i]["userType"] = "please_support";
-			if (data["Accounts"][i]["userType"] == 0) data["Accounts"][i]["userType"] = "please_support";
-			if (data["Accounts"][i]["userType"] == 1) data["Accounts"][i]["userType"] = "microsoft";
+		for (size_t i = 0; i < data["Accounts"].size(); i++) {
+			if (!data["Accounts"][(int)i].isMember("userType")) data["Accounts"][(int)i]["userType"] = "please_support";
+			if (data["Accounts"][(int)i]["userType"] == 0) data["Accounts"][(int)i]["userType"] = "please_support";
+			if (data["Accounts"][(int)i]["userType"] == 1) data["Accounts"][(int)i]["userType"] = "microsoft";
 		}
 	}
 	// Check missing keys. 

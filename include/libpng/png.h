@@ -1240,13 +1240,13 @@ PNG_EXPORT(38, void, png_set_invert_alpha, (png_structrp png_ptr));
 #endif
 
 #if defined(PNG_READ_FILLER_SUPPORTED) || defined(PNG_WRITE_FILLER_SUPPORTED)
-/* Add a filler byte to 8-bit or 16-bit Gray or 24-bit or 48-bit RGB images. */
+/* Add a filler byte to 8-bit or 16-bit Gray or 24-bit or 48-bit RGB dynamicImages. */
 PNG_EXPORT(39, void, png_set_filler, (png_structrp png_ptr, png_uint_32 filler,
     int flags));
 /* The values of the PNG_FILLER_ defines should NOT be changed */
 #  define PNG_FILLER_BEFORE 0
 #  define PNG_FILLER_AFTER 1
-/* Add an alpha byte to 8-bit or 16-bit Gray or 24-bit or 48-bit RGB images. */
+/* Add an alpha byte to 8-bit or 16-bit Gray or 24-bit or 48-bit RGB dynamicImages. */
 PNG_EXPORT(40, void, png_set_add_alpha, (png_structrp png_ptr,
     png_uint_32 filler, int flags));
 #endif /* READ_FILLER || WRITE_FILLER */
@@ -1500,7 +1500,7 @@ PNG_FIXED_EXPORT(209, void, png_set_filter_heuristics_fixed,
  * 0 - 9, corresponding directly to the zlib compression levels 0 - 9
  * (0 - no compression, 9 - "maximal" compression).  Note that tests have
  * shown that zlib compression levels 3-6 usually perform as well as level 9
- * for PNG images, and do considerably fewer calculations.  In the future,
+ * for PNG dynamicImages, and do considerably fewer calculations.  In the future,
  * these values may not correspond directly to the zlib compression levels.
  */
 #ifdef PNG_WRITE_CUSTOMIZE_COMPRESSION_SUPPORTED
@@ -2428,7 +2428,7 @@ PNG_EXPORT(216, png_uint_32, png_get_io_chunk_type,
 
 /* Interlace support.  The following macros are always defined so that if
  * libpng interlace handling is turned off the macros may be used to handle
- * interlaced images within the application.
+ * interlaced dynamicImages within the application.
  */
 #define PNG_INTERLACE_ADAM7_PASSES 7
 
@@ -2756,7 +2756,7 @@ typedef struct
  * macros to test for individual features - future versions of the library may
  * add new flags.
  *
- * When reading or writing color-mapped images the format should be set to the
+ * When reading or writing color-mapped dynamicImages the format should be set to the
  * format of the entries in the color-map then png_image_{read,write}_colormap
  * called to read or write the color-map and set the format correctly for the
  * image data.  Do not set the PNG_FORMAT_FLAG_COLORMAP bit directly!
@@ -2898,7 +2898,7 @@ typedef struct
     * row.  For a color-mapped image this is the minimum number of bytes in a
     * row.
     *
-    * WARNING: this macro overflows for some images with more than one component
+    * WARNING: this macro overflows for some dynamicImages with more than one component
     * and very large image widths.  libpng will refuse to process an image where
     * this macro would overflow.
     */
@@ -2908,7 +2908,7 @@ typedef struct
    /* Return the size, in bytes, of an image buffer given a png_image and a row
     * stride - the number of components to leave space for in each row.
     *
-    * WARNING: this macro overflows a 32-bit integer for some large PNG images,
+    * WARNING: this macro overflows a 32-bit integer for some large PNG dynamicImages,
     * libpng will refuse to process an image where such an overflow would occur.
     */
 
@@ -2939,19 +2939,19 @@ typedef struct
 #define PNG_IMAGE_FLAG_FAST 0x02
    /* On write emphasise speed over compression; the resultant PNG file will be
     * larger but will be produced significantly faster, particular for large
-    * images.  Do not use this option for images which will be distributed, only
+    * dynamicImages.  Do not use this option for dynamicImages which will be distributed, only
     * used it when producing intermediate files that will be read back in
     * repeatedly.  For a typical 24-bit image the option will double the read
     * speed at the cost of increasing the image size by 25%, however for many
-    * more compressible images the PNG file can be 10 times larger with only a
+    * more compressible dynamicImages the PNG file can be 10 times larger with only a
     * slight speed gain.
     */
 
 #define PNG_IMAGE_FLAG_16BIT_sRGB 0x04
    /* On read if the image is a 16-bit per component image and there is no gAMA
     * or sRGB chunk assume that the components are sRGB encoded.  Notice that
-    * images output by the simplified API always have gamma information; setting
-    * this flag only affects the interpretation of 16-bit images from an
+    * dynamicImages output by the simplified API always have gamma information; setting
+    * this flag only affects the interpretation of 16-bit dynamicImages from an
     * external source.  It is recommended that the application expose this flag
     * to the user; the user can normally easily recognize the difference between
     * linear and sRGB encoding.  This flag has no effect on write - the data
@@ -3042,7 +3042,7 @@ PNG_EXPORT(238, void, png_image_free, (png_imagep image));
  * height: image height in rows
  * format: the format of the data (image and color-map) you wish to write
  * flags: set to 0 unless one of the defined flags applies; set
- *    PNG_IMAGE_FLAG_COLORSPACE_NOT_sRGB for color format images where the RGB
+ *    PNG_IMAGE_FLAG_COLORSPACE_NOT_sRGB for color format dynamicImages where the RGB
  *    values do not correspond to the colors in sRGB.
  * colormap_entries: set to the number of entries in the color-map (0 to 256)
  */
@@ -3191,7 +3191,7 @@ PNG_EXPORT(245, int, png_image_write_to_memory, (png_imagep image, void *memory,
  *
  * SOFTWARE: sometimes software optimizations actually result in performance
  *           decrease on some architectures or systems, or with some sets of
- *           PNG images.  'Software' options allow such optimizations to be
+ *           PNG dynamicImages.  'Software' options allow such optimizations to be
  *           selected at run time.
  */
 #ifdef PNG_SET_OPTION_SUPPORTED
