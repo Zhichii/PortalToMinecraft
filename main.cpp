@@ -3,9 +3,8 @@
 #define CPP_TKINTER_SAFE_FUNCTIONS
 #define CURL_STATICLIB
 #define TCL_THREADS
-#define il if
-#define el else if
-#define ol else
+#define lf else if
+#define ef else
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
 #endif
@@ -152,8 +151,6 @@ void swiPage(std::string page, bool noAnimation) {
 	doingAnim.unlock();
 }
 
-BOOL dark = 0;
-
 std::vector<std::string> dynamicImages = {
 	"addImage","addImageActive","brightImage","brightImageActive","darkImage","darkImageActive",
 	"editImage","editImageActive","launchImage","launchImageActive",
@@ -172,21 +169,21 @@ void colorPhotos(std::string name,
 	unsigned char* stream__ = blk.pixelPtr;
 	if (name.ends_with("Active"))
 		for (int i = 0; i < blk.height * blk.width; i++) {
-			il (stream__[blk.offset[0]] == 0x48 &&
+			if (stream__[blk.offset[0]] == 0x48 &&
 				stream__[blk.offset[1]] == 0x48 &&
 				stream__[blk.offset[2]] == 0x48) {
 				stream__[blk.offset[0]] = r3;
 				stream__[blk.offset[1]] = g3;
 				stream__[blk.offset[2]] = b3;
 			}
-			el (stream__[blk.offset[0]] == 0x7f &&
+			lf (stream__[blk.offset[0]] == 0x7f &&
 				stream__[blk.offset[1]] == 0x7f &&
 				stream__[blk.offset[2]] == 0x7f) {
 				stream__[blk.offset[0]] = r4;
 				stream__[blk.offset[1]] = g4;
 				stream__[blk.offset[2]] = b4;
 			}
-			el (stream__[blk.offset[0]] == 0xff &&
+			lf (stream__[blk.offset[0]] == 0xff &&
 				stream__[blk.offset[1]] == 0xff &&
 				stream__[blk.offset[2]] == 0xff) {
 				stream__[blk.offset[0]] = r5;
@@ -197,21 +194,21 @@ void colorPhotos(std::string name,
 		}
 	else
 		for (int i = 0; i < blk.height * blk.width; i++) {
-			il (stream__[blk.offset[0]] == 0x48 &&
+			if (stream__[blk.offset[0]] == 0x48 &&
 				stream__[blk.offset[1]] == 0x48 &&
 				stream__[blk.offset[2]] == 0x48) {
 				stream__[blk.offset[0]] = r1;
 				stream__[blk.offset[1]] = g1;
 				stream__[blk.offset[2]] = b1;
 			}
-			el (stream__[blk.offset[0]] == 0x7f &&
+			lf (stream__[blk.offset[0]] == 0x7f &&
 				stream__[blk.offset[1]] == 0x7f &&
 				stream__[blk.offset[2]] == 0x7f) {
 				stream__[blk.offset[0]] = r2;
 				stream__[blk.offset[1]] = g2;
 				stream__[blk.offset[2]] = b2;
 			}
-			el (stream__[blk.offset[0]] == 0xff &&
+			lf (stream__[blk.offset[0]] == 0xff &&
 				stream__[blk.offset[1]] == 0xff &&
 				stream__[blk.offset[2]] == 0xff) {
 				stream__[blk.offset[0]] = r5;
@@ -228,12 +225,12 @@ void fillColor(std::string name) {
 	std::string x = call({ name,"config","-image" });
 	std::string y = call({ name,"config","-compound" });
 	bool chFore = false;
-	for (const auto& i : dynamicImages) il("-image image Image {} "+i==x) { chFore=true; break; }
-	il(x != "unknown option \"-image\"" && x != "-image image Image {} {}") {
-		il(Strings::count(y, "center") == 0) chFore = true;
-	} ol chFore = true;
-	il(Strings::count(y,"center")==0) chFore = true;
-	il (chFore) call({ name,"config","-foreground",textColor });
+	for (const auto& i : dynamicImages) if("-image image Image {} "+i==x) { chFore=true; break; }
+	if(x != "unknown option \"-image\"" && x != "-image image Image {} {}") {
+		if(Strings::count(y, "center") == 0) chFore = true;
+	} ef chFore = true;
+	if(Strings::count(y,"center")==0) chFore = true;
+	if (chFore) call({ name,"config","-foreground",textColor });
 	std::string children = call({ "winfo","children",name });
 	if (children == "") return;
 	std::vector<std::string> childrenList = Strings::split(children, " ");
@@ -248,12 +245,12 @@ void colorUpdate() {
 std::vector<std::string> listVersion() {
 	std::vector<std::string> versions;
 	std::string versionDir = rdata("GameDir").asString() + "versions";
-	il(isDir(versionDir)) {
+	if(isDir(versionDir)) {
 		auto iter = std::filesystem::directory_iterator::directory_iterator(versionDir);
 		for (auto& v : iter) {
 			std::wstring fileName = v.path().filename().wstring();
 			std::wstring jsonPath = Strings::s2ws(versionDir) + LPATHSEP + fileName + LPATHSEP + fileName + L".json";
-			il(!isExists(jsonPath)) {
+			if(!isExists(jsonPath)) {
 				writeLog("Listing versions: File \"%s\" does not exist. ", Strings::ws2s(jsonPath).c_str());
 				continue;
 			}
@@ -263,51 +260,51 @@ std::vector<std::string> listVersion() {
 				Json::Reader reader;
 				reader.parse(jsonFile, info);
 				std::string pre = "?:";
-				il(info["type"] == "release") pre = "r:";
-				el(info["type"] == "snapshot") pre = "s:";
-				ol pre = "x:";
+				if(info["type"] == "release") pre = "r:";
+				lf(info["type"] == "snapshot") pre = "s:";
+				ef pre = "x:";
 				std::string mod = "vanil:";
-				il(info["mainClass"] == "net.fabricmc.loader.impl.launch.knot.KnotClient") {
+				if(info["mainClass"] == "net.fabricmc.loader.impl.launch.knot.KnotClient") {
 					mod = "fabri:";
 				}
-				el(info["mainClass"] == "net.featherloader.FeatherLoader") {
+				lf(info["mainClass"] == "net.featherloader.FeatherLoader") {
 					mod = "fealo:";
 				}
-				el(info["mainClass"] == "cpw.mods.modlauncher.Launcher" ||
+				lf(info["mainClass"] == "cpw.mods.modlauncher.Launcher" ||
 				   info["mainClass"] == "net.minecraft.launchwrapper.Launch") {
-					il(info.isMember("arguments")) {
+					if(info.isMember("arguments")) {
 						for (const auto& i : info["arguments"]["game"]) {
-							il(i.type() != Json::stringValue) continue;
-							il(i.asString() == "--fml.forgeVersion") {
-								il(mod == "optif:") mod = "optfo:";
-								el(mod == "vanil:") mod = "forge:";
+							if(i.type() != Json::stringValue) continue;
+							if(i.asString() == "--fml.forgeVersion") {
+								if(mod == "optif:") mod = "optfo:";
+								lf(mod == "vanil:") mod = "forge:";
 							}
-							il(i.asString() == "optifine.OptiFineTweaker") {
-								il(mod == "forge:") mod = "optfo:";
-								el(mod == "vanil:") mod = "optif:";
+							if(i.asString() == "optifine.OptiFineTweaker") {
+								if(mod == "forge:") mod = "optfo:";
+								lf(mod == "vanil:") mod = "optif:";
 							}
 						}
 					}
-					el(info.isMember("minecraftArguments")) {
-						il(Strings::count(info["minecraftArguments"].asString(), "--tweakClass optifine.OptiFineTweaker")) {
+					lf(info.isMember("minecraftArguments")) {
+						if(Strings::count(info["minecraftArguments"].asString(), "--tweakClass optifine.OptiFineTweaker")) {
 							mod = "optif:";
 						}
-						il(Strings::count(info["minecraftArguments"].asString(), "--tweakClass cpw.mods.fml.common.launcher.FMLTweaker")) {
-							il(mod == "optif:") mod = "optfo:";
-							ol mod = "forge:";
+						if(Strings::count(info["minecraftArguments"].asString(), "--tweakClass cpw.mods.fml.common.launcher.FMLTweaker")) {
+							if(mod == "optif:") mod = "optfo:";
+							ef mod = "forge:";
 						}
 					}
 				}
-				el(info["mainClass"] == "cpw.mods.bootstraplauncher.BootstrapLauncher") {
+				lf(info["mainClass"] == "cpw.mods.bootstraplauncher.BootstrapLauncher") {
 					for (const auto& i : info["arguments"]["game"]) {
 						if (i.type() != Json::stringValue) continue;
-						il(i.asString() == "--fml.neoForgeVersion") {
-							il(mod == "optif:") mod = "optne:";
-							el(mod == "vanil:") mod = "neofo:";
+						if(i.asString() == "--fml.neoForgeVersion") {
+							if(mod == "optif:") mod = "optne:";
+							lf(mod == "vanil:") mod = "neofo:";
 						}
-						il(i.asString() == "optifine.OptiFineTweaker") {
-							il(mod == "neofo:") mod = "optne:";
-							el(mod == "vanil:") mod = "optif:";
+						if(i.asString() == "optifine.OptiFineTweaker") {
+							if(mod == "neofo:") mod = "optne:";
+							lf(mod == "vanil:") mod = "optif:";
 						}
 					}
 				}
@@ -326,29 +323,44 @@ std::vector<std::string> listVersion() {
 
 int launchGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	std::thread thr([argv]()->int {
-		char* a = (char*)argv[1];
 		size_t n = strtoull(argv[1], nullptr, 10);
-		std::string name = Strings::slice1(listVersion()[n], 8);
-		std::wstring av = Strings::s2ws(name);
+		std::string versionDir = rdata("GameDir").asString() + "versions";
+		std::string name;
+		std::wstring av;
+		if(isDir(versionDir)) {
+			size_t i = 0;
+			auto iter = std::filesystem::directory_iterator::directory_iterator(versionDir);
+			for (auto& v : iter) {
+				std::wstring fileName = v.path().filename().wstring();
+				std::wstring jsonPath = Strings::s2ws(versionDir) + LPATHSEP + fileName + LPATHSEP + fileName + L".json";
+				if(!isExists(jsonPath)) {
+					writeLog("Launching: File \"%s\" does not exist. ", Strings::ws2s(jsonPath).c_str());
+					continue;
+				}
+				if (i == n) {
+					name = v.path().filename().string();
+					av = v.path().filename().wstring();
+				}
+				i++;
+			}
+		}
+		if (name == "") {
+			writeLog("Launching: Version doesn't exists. ");
+			call({ "msgbx","error","minecraft.unable","error" });
+			return 0;
+		}
 		writeLog("Launching game \"%s\"...", name);
 		VersionInfo* target = nullptr;
-		std::string versionDir = rdata("GameDir").asString() + "versions";
 		std::wstring jsonPath = Strings::s2ws(versionDir) + LPATHSEP + av + LPATHSEP + av + L".json";
-		il(!isExists(jsonPath)) {
-			writeLog("Launching: File \"%s\" does not exist. ", Strings::ws2s(jsonPath).c_str());
+		try {
+			target = new VersionInfo(jsonPath);
+		}
+		catch (std::exception e) {
+			writeLog("Launching: Failed to initialize json \"%s\": %s", Strings::ws2s(jsonPath).c_str(), e.what());
+			delete target;
 			target = nullptr;
 		}
-		else {
-			try {
-				target = new VersionInfo(jsonPath);
-			}
-			catch (std::exception e) {
-				writeLog("Launching: Failed to initialize json \"%s\": %s", Strings::ws2s(jsonPath).c_str(), e.what());
-				delete target;
-				target = nullptr;
-			}
-		}
-		il(target == nullptr) {
+		if(target == nullptr) {
 			call({ "msgbx","error","minecraft.unable","error" });
 			return 0;
 		}
@@ -359,34 +371,34 @@ int launchGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 		}
 		std::string cmdA = target->genLaunchCmd(cmd, rdata("GameDir").asString(), rdata("SelectedAccount").asInt(), features);
 		delete target;
-		il(cmdA == "") return 0;
+		if(cmdA == "") return 0;
 		writeLog("Launch: %s", cmdA.c_str());
 		std::map<std::string,std::string> state = {};
 		execNotThrGetOutInvoke(cmd, &state, Strings::s2ws(rdata("GameDir").asString()), [](const std::string& o, void* r)->int {
-			il(r == nullptr) return 1;
+			if(r == nullptr) return 1;
 			std::map<std::string,std::string>& record = *(std::map<std::string,std::string>*)r;
-			il(o.starts_with("---- Minecraft Crash Report ----"))
+			if(o.starts_with("---- Minecraft Crash Report ----"))
 				record["crashReport"] = "1";
-			il(o.starts_with("#@!@# Game crashed! Crash report saved to: #@!@#"))
+			if(o.starts_with("#@!@# Game crashed! Crash report saved to: #@!@#"))
 				record["reportSaved"] = "1";
-			il(Strings::slice1(o, 11) == "[Client thread/INFO]: Stopping!")
+			if(Strings::slice1(o, 11) == "[Client thread/INFO]: Stopping!")
 				record["normalStopping"] = "1";
-			il(Strings::slice1(o, 13).starts_with("[main] ERROR FabricLoader/")) {
+			if(Strings::slice1(o, 13).starts_with("[main] ERROR FabricLoader/")) {
 				record["isFabric"] = "1";
 				record["fabricError"] = Strings::between(o, "[main] ERROR FabricLoader/", "\r");
 			}
-			il(Strings::slice1(o, 13).starts_with("[main] ERROR FabricLoader - ")) {
+			if(Strings::slice1(o, 13).starts_with("[main] ERROR FabricLoader - ")) {
 				record["isFabric"] = "1";
 				record["fabricError"] = Strings::between(o, "[main] ERROR FabricLoader - ", "\r");
 			}
-			il(o == "") record["lastSpace"] = "1";
-			il(record.contains("isFabric")) {
+			if(o == "") record["lastSpace"] = "1";
+			if(record.contains("isFabric")) {
 				std::string error = Strings::strFormat(currentLanguage->localize("minecraft.fabric_crash"),
 					record["fabricError"]).c_str();
 				call({ "msgbx","error","<text>","error", error });
 				record = {};
 			}
-			il(record.contains("crashReport") &&
+			if(record.contains("crashReport") &&
 			    record.contains("reportSaved") &&
 			    !record.contains("normalStopping")) {
 				call({ "msgbx","error","minecraft.crash","error" });
@@ -409,11 +421,11 @@ int pageGame(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	for (auto& i : versions) {
 		std::string image;
 		std::string mod = Strings::slice1(i, 2, 7);
-		il(i[0] == 'x') image = "brokenImage";
+		if(i[0] == 'x') image = "brokenImage";
 		if (mod == "vanil") {
 			mod = "Vanilla";
-			il(i[0] == 'r') image = "releaseImage";
-			il(i[0] == 's') image = "snapshotImage";
+			if(i[0] == 'r') image = "releaseImage";
+			if(i[0] == 's') image = "snapshotImage";
 		}
 		if (mod == "fabri") {
 			mod = "Fabric";
@@ -467,15 +479,31 @@ int pageMods(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 
 int addAccount(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	control(".windowAddAccount", "toplevel");
-	std::string title = "dialog";
-	std::string content = "accounts.add.ask_type";
-	call({ "wm","title",".windowAddAccount",currentLanguage->localize(title)});
-	control(".windowAddAccount.text", "ttk::label", { "-text",currentLanguage->localize(content) });
-	control(".windowAddAccount.ok", "ttk::button", { "-text",currentLanguage->localize("ok") });
-	call({ ".windowAddAccount.ok","config","-command","destroy .windowAddAccount"});
-	call({ "grid",".windowAddAccount.text" });
-	call({ "grid",".windowAddAccount.ok" });
+	call({ "wm","title",".windowAddAccount",currentLanguage->localize("dialog") });
+	control(".windowAddAccount.cancel", "ttk::button", { "-textvariable","cancel","-command","destroy .windowAddAccount" });
+
+	control(".windowAddAccount.legacy", "frame");
+	control(".windowAddAccount.legacy.text", "ttk::label", { "-textvariable","accounts.add.legacy_name" });
+	control(".windowAddAccount.legacy.ok", "ttk::button", { "-textvariable","ok" });
+	call({ "grid",".windowAddAccount.legacy.text" });
+	call({ "grid",".windowAddAccount.legacy.ok" });
+
+	control(".windowAddAccount.selType", "frame");
+	control(".windowAddAccount.selType.text", "ttk::label", { "-textvariable","accounts.add.ask_type" });
+	control(".windowAddAccount.selType.microsoft", "ttk::button", { "-textvariable","accounts.microsoft" });
+	control(".windowAddAccount.selType.legacy", "ttk::button", { "-textvariable","accounts.legacy","-command",
+		"grid forget .windowAddAccount.selType;\
+grid forget .windowAddAccount.cancel;\
+grid .windowAddAccount.legacy;\
+grid .windowAddAccount.cancel" });
+	call({ "grid",".windowAddAccount.selType.text" });
+	call({ "grid",".windowAddAccount.selType.microsoft" });
+	call({ "grid",".windowAddAccount.selType.legacy" });
+	call({ "grid",".windowAddAccount.selType" });
+
+	call({ "grid",".windowAddAccount.cancel" });
 	fillColor(".windowAddAccount");
+	turnDark(".windowAddAccount");
 	return 0;
 }
 
@@ -494,7 +522,7 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 	size_t n = 0;
 	for (const auto& i : accounts) {
 		writeLog("UT: %s. ", i["userType"].asCString());
-		il(i["userType"].asString() == "mojang") {
+		if(i["userType"].asString() == "mojang") {
 			accountList->add(i["userName"].asString()+"\n      "+currentLanguage->localize("accounts.microsoft"), "<canvas>", {"editImage",""});
 			png_byte* png_file;
 			size_t file_size;
@@ -524,7 +552,7 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 						clr[4] = toHex(data[i*bytesPerRow+j*4+1]/1 % 16);
 						clr[5] = toHex(data[i*bytesPerRow+j*4+2]/16 % 16);
 						clr[6] = toHex(data[i*bytesPerRow+j*4+2]/1 % 16);
-						call({ accountList->owned[accountList->owned.size()-1].ctrlId+".image","create","rect",
+						call({ accountList->get(accountList->owned.size()-1).ctrlId + ".img","create","rect",
 							std::to_string(2+(i-8)*8),  std::to_string(2+(j-8)*8),
 							std::to_string(2+(i-8)*8+8),std::to_string(2+(j-8)*8+8),
 							"-fill",clr,"-outline","" });
@@ -538,7 +566,7 @@ int pageAcco(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 			delete[] data;
 			delete[] png_file;
 		}
-		ol{
+		ef{
 			accountList->add(i["userName"].asString()+"\n      "+currentLanguage->localize("accounts.legacy"), "steveImage", {"editImage",""});
 		}
 		accountList->bind(accountList->owned.size()-1, "<Button-1>", "selectAccount "+std::to_string(accountList->owned.size()-1));
@@ -566,12 +594,12 @@ int pageSett(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 
 int selectLanguage(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	MyList* languageList = (MyList*)clientData;
-	il(argc == 1) {
+	if(argc == 1) {
 		rdata("Language") = "auto";
 		languageList->userSelect(0);
 		currentLanguage = allLanguages[getDefaultLanguage()];
 	}
-	ol {
+	ef {
 		rdata("Language") = argv[1];
 		languageList->userSelect(atoi(argv[2]));
 		currentLanguage = allLanguages[argv[1]];
@@ -579,14 +607,19 @@ int selectLanguage(ClientData clientData, Tcl_Interp* interp, int argc, const ch
 	saveData();
 	for (const auto& i : currentLanguage->lang)
 		call({ "set",i.first,i.second });
+	call({ languageList->get(0).ctrlId + ".txt","config","-text",currentLanguage->localize("lang.auto") });
+	call({ languageList->get(1).ctrlId + ".txt","config","-text",currentLanguage->localize("lang.empty") });
 	call({ "set","none","" });
 	call({ "wm","title",ROOT,currentLanguage->localize("title") });
 	return 0;
 }
 
 int pageLang(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
-	((MyList*)clientData)->update();
-	((MyList*)clientData)->yview("", 0, 0);
+	MyList* languageList = (MyList*)clientData;
+	languageList->update();
+	languageList->yview("", 0, 0);
+	call({ languageList->get(0).ctrlId+".txt","config","-text",currentLanguage->localize("lang.auto") });
+	call({ languageList->get(1).ctrlId+".txt","config","-text",currentLanguage->localize("lang.empty") });
 	if (argc == -1) return 0;
 	swiPage(".pageLang", argc == -2);
 	return 0;
@@ -614,8 +647,8 @@ void createPhotos() {
 	call({ "image","create","photo","tabYImage","-file","assets\\ctrl\\tabY.png" });
 	call({ "image","create","photo","tabYImageActive","-file","assets\\ctrl\\tabY.png" });
 	// Controls v3. 
-	call({ "image","create","photo","buttonxImage","-file","assets\\control\\buttonx.png" });
-	call({ "image","create","photo","buttonxImageActive","-file","assets\\control\\buttonx.png" });
+	call({ "image","create","photo","buttonxImage","-file","assets\\ctrl\\buttonx.png" });
+	call({ "image","create","photo","buttonxImageActive","-file","assets\\ctrl\\buttonx.png" });
 	// Icon Buttons. 
 	call({ "image","create","photo","launchImage","-file","assets\\iconbutton\\launch.png" });
 	call({ "image","create","photo","launchImageActive","-file","assets\\iconbutton\\launch.png" });
@@ -633,14 +666,11 @@ void createPhotos() {
 	call({ "image","create","photo","steveImage","-file","assets\\misc\\steve.png" });
 }
 
-Tk_Window mainWin;
-std::string geometry;
 Tcl_ThreadId mainThr;
-HWND hWnd;
 
 int main() {
 
-	il (mkdir("RvL\\") != 0 && errno == ENOENT) {
+	if (mkdir("RvL\\") != 0 && errno == ENOENT) {
 		MessageBoxA(nullptr, "Failed to make dir [RvL\\]. ", "Error", MB_ICONERROR | MB_OK);
 		return 0;
 	}
@@ -677,7 +707,7 @@ int main() {
 	// Set the default language. 
 	{
 		std::string t = rdata("Language").asString();
-		il(!allLanguages.contains(t)) t = getDefaultLanguage();
+		if(!allLanguages.contains(t)) t = getDefaultLanguage();
 		currentLanguage = allLanguages[t];
 	}
 
@@ -707,6 +737,7 @@ int main() {
 		writeLog("Font successfully added. ");
 	}
 	else writeLog("Font adding failed. ");
+	//call({ "font","create","font1","-family","Unifont","-size","11" });
 	call({ "font","create","font1","-family","Source Han Sans CN","-size","10","-weight","bold" });
 
 	primaryColor = "#000000";
@@ -716,21 +747,24 @@ int main() {
 	selectColor = "#000000";
 	CreateCmd("chTheme", [](ClientData clientData,
 		Tcl_Interp* interp, int argc, const char* argv[])->int {
-			short rO = 0x2b, gO = 0x82, bO = 0x82; // Origin
+			// Origin
+			short rO = (rdata("ThemeColor").asInt()&(0xff0000))>>16;
+			short gO = (rdata("ThemeColor").asInt()&(0x00ff00))>>8;
+			short bO = (rdata("ThemeColor").asInt()&(0x0000ff))>>0;
 			short rB=rO*1.2, gB=gO*1.2, bB=bO*1.2; // Brighter
 			if (rB > 0xff) rB = 0xff;
 			if (gB > 0xff) gB = 0xff;
 			if (bB > 0xff) bB = 0xff;
-			short rHD=rO-50,	gHD=gO-50,	bHD=bO-50;	// Hover Dark
+			short rHD=rO*0.6,	gHD=gO*0.6,	bHD=bO*0.6;	// Hover Dark
 			if (rHD < 0x00) rHD = 0x00;
 			if (gHD < 0x00) gHD = 0x00;
 			if (bHD < 0x00) bHD = 0x00;
-			short rHL=rO+114,	gHL=gO+114,	bHL=bO+114;	// Hover Light #ddf4f4
+			short rHL=rO*1.6,	gHL=gO*1.6,	bHL=bO*1.6;	// Hover Light
 			if (rHL > 0xff) rHL = 0xff;
 			if (gHL > 0xff) gHL = 0xff;
 			if (bHL > 0xff) bHL = 0xff;
 			createPhotos();
-			il(dark) {
+			if(dark) {
 				primaryColor = "#ffffff";
 				secondaryColor = "#e6e6e6";
 				textColor = "#000000";
@@ -745,7 +779,7 @@ int main() {
 				);
 				dark = FALSE;
 			}
-			ol{
+			ef{
 				primaryColor = "#1f1f1f";
 				secondaryColor = "#000000";
 				textColor = "#ffffff";
@@ -765,18 +799,14 @@ int main() {
 			call({ "bind",".themeButton","<Enter>",".themeButton config -image "+img+"Active" });
 			call({ "bind",".themeButton","<Leave>",".themeButton config -image "+img });
 			call({ ".themeButton","config","-image",img+"Active" });
-			for (const auto& i : windows) {
-				std::string name = i.first;
-				HWND hWnd = GetParent((HWND)strtoull(call({ "winfo","id",name }).c_str(),nullptr,16));
-				DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-				std::string curGeo = call({ "wm","geometry",name });
-				std::string curGeo2 = curGeo;
-				size_t pos = Strings::find(curGeo, "+")[0]-1;
-				if (curGeo2[pos]=='0') curGeo2[pos] = '1';
-				else curGeo2[pos]--;
-				call({ "wm","geometry",name,curGeo2 });
-				call({ "update" });
-				call({ "wm","geometry",name,curGeo });
+			std::vector<std::string> names;
+			for (const auto& i : windows) names.push_back(i.first);
+			for (const auto& name : names) {
+				if (call({ "winfo","exists",name }) == "0") {
+					windows.erase(name);
+					continue;
+				}
+				turnDark(name);
 			}
 			return 0;
 		}, 0);
@@ -841,20 +871,30 @@ int main() {
 	control(".pageSett.content.tabs", "frame");
 	control(".pageSett.content.pageGame", "frame");
 	control(".pageSett.content.pageGame.size", "frame");
-	control(".pageSett.content.pageGame.size.text", "ttk::label", {"-text","655","-image","horizontalImage","-compound","left","-foreground",textColor });
+	control(".pageSett.content.pageGame.size.text", "ttk::label", {"-textvariable","settings.game.size","-image","horizontalImage","-compound","left","-width","20" });
+	control(".pageSett.content.pageGame.size.wid", "ttk::label", {"-text","1618","-width","8" });
+	control(".pageSett.content.pageGame.size.x", "ttk::label", {"-text","x" ,"-width","4" });
+	control(".pageSett.content.pageGame.size.hei", "ttk::label", {"-text","1000","-width","8" });
 	control(".pageSett.content.pageGame.java", "frame");
+	control(".pageSett.content.pageGame.java.text", "ttk::label", { "-textvariable","settings.game.java","-image","horizontalImage","-compound","left","-width","20" });
+	MyButtonIconActive(".pageSett.content.pageGame.java.manage", "settings.game.java.manage", "editImage", "", 20);
 	control(".pageSett.content.pageGame.memo", "frame");
 	control(".pageSett.content.pageGame.memv", "frame");
 	control(".pageSett.content.pagePers", "frame");
 	control(".pageSett.content.pageLaun", "frame");
-	call({"grid",".pageSett.content"});
-	call({"grid",".pageSett.content.tabs","-column","1","-row","1"});
-	call({"grid",".pageSett.content.pageGame","-column","1","-row","2"});
-	call({"grid",".pageSett.content.pageGame.size","-column","1","-row","1"});
-	call({"grid",".pageSett.content.pageGame.size.text","-column","1","-row","1"});
-	call({"grid",".pageSett.content.pageGame.java","-column","1","-row","2"});
-	call({"grid",".pageSett.content.pageGame.memo","-column","1","-row","3"});
-	call({"grid",".pageSett.content.pageGame.memv","-column","1","-row","4"});
+	call({ "grid",".pageSett.content" });
+	call({ "grid",".pageSett.content.tabs","-column","1","-row","1" });
+	call({ "grid",".pageSett.content.pageGame","-column","1","-row","2" });
+	call({ "grid",".pageSett.content.pageGame.size","-column","1","-row","1" });
+	call({ "grid",".pageSett.content.pageGame.size.text","-column","1","-row","1" });
+	call({ "grid",".pageSett.content.pageGame.size.wid","-column","2","-row","1" });
+	call({ "grid",".pageSett.content.pageGame.size.x","-column","3","-row","1" });
+	call({ "grid",".pageSett.content.pageGame.size.hei","-column","4","-row","1" });
+	call({ "grid",".pageSett.content.pageGame.java","-column","1","-row","2" });
+	call({ "grid",".pageSett.content.pageGame.java.text","-column","1","-row","2" });
+	call({ "grid",".pageSett.content.pageGame.java.manage","-column","2","-row","2" });
+	call({ "grid",".pageSett.content.pageGame.memo","-column","1","-row","3" });
+	call({ "grid",".pageSett.content.pageGame.memv","-column","1","-row","4" });
 	//call({"grid",".pageSett.content.pagePers","-column","1","-row","2"});
 	//call({"grid",".pageSett.content.pageLaun","-column","1","-row","2"});
 
@@ -872,20 +912,18 @@ int main() {
 	langList->bind(0, "<Button-1>", "selectLanguage");
 	for (const auto& i : allLanguages) {
 		std::string name = i.second->getName();
-		il(i.second->getName() == "empty") name = currentLanguage->localize("lang.empty");
+		if(i.second->getName() == "empty") name = currentLanguage->localize("lang.empty");
 		langList->add(name);
 		langList->bind(langList->owned.size()-1, "<Button-1>", "selectLanguage "+i.first+" "+std::to_string(langList->owned.size()-1));
 	}
-	il(rdata("Language") == "auto") {
+	if(rdata("Language") == "auto") {
 		langList->select(0);
 	}
 	else for (int i = 0; i < langManifest.size(); i++) {
-		il(langManifest[i].first == currentLanguage->getID()) {
+		if(langManifest[i].first == currentLanguage->getID()) {
 			langList->select(i+1);
 		}
 	}
-	call({ langList->get(0).ctrlId+".text","config","-textvariable","lang.auto"});
-	call({ langList->get(1).ctrlId+".text","config","-textvariable","lang.empty"});
 
 	// Others. 
 	CreateCmd("swiGame", pageGame, gameList);
@@ -931,7 +969,7 @@ int main() {
 	//	for (int i = 0; i < 100; i++) {
 	//		for (int j = 0; j < 10;j++)Tcl_DoOneEvent(TCL_DONT_WAIT);
 	//		Tcl_Sleep(2);
-	//		il(call({ "winfo","exists","." }, 1) != "1") break;
+	//		if(call({ "winfo","exists","." }, 1) != "1") break;
 	//	}
 	//	continue;
 	//	// Refresh version list. 
@@ -941,8 +979,8 @@ int main() {
 	//		size_t n = 0;
 	//		for (auto& i : versions) {
 	//			std::string image;
-	//			il(i[0]=='r')	image = "releaseImage";
-	//			il(i[0]=='s')	image = "snapshotImage";
+	//			if(i[0]=='r')	image = "releaseImage";
+	//			if(i[0]=='s')	image = "snapshotImage";
 	//			std::string id = Strings::slice1(i, 2);
 	//			versionList->add(id, image, {"launchImage","launch " + id,"editImage",""});
 	//			n++;
@@ -970,22 +1008,26 @@ int main() {
 		std::fstream ostr = std::fstream("test.json", std::ios::out);
 		ostr.write(dat, sz);
 		ostr.close();
-		delete dat;
+		if (dat != nullptr) delete dat;
 		if (status) writeLog("Failed to get the version manifest at step %d. ", status);
 		else writeLog("Successfully got the version manifest! ");
 		return 0;
 	});
 	thr.detach();
-	auto evSetup = [](ClientData clientData, int flags) { };
-	auto evCheck = [](ClientData clientData, int flags) { };
-	Tcl_CreateEventSource(evSetup, evCheck, 0);
+	auto evSetup = [](ClientData clientData, int flags) {  };
+	auto evCheck = [](ClientData clientData, int flags) {  };
+	auto evDelet = [](ClientData clientData, int flags) {  };
+	Tcl_CreateEventSource(evSetup, evCheck, (ClientData)114514);
 	//Tcl_ThreadId gameUpdThread;	Tcl_CreateThread(&gameUpdThread, [](ClientData clientData)->unsigned {
 	//	ThreadEvent* ev = (ThreadEvent*)Tcl_Alloc(sizeof(ThreadEvent));
 	//	ev->cd = clientData;
 	//	Tcl_Event* ev_ = (Tcl_Event*)ev;
 	//	ev_->proc = [](Tcl_Event* evPtr, int flags)->int {
 	//		ThreadEvent* ev = (ThreadEvent*)evPtr;
-	//		writeLog("%d yyy", ev->cd);
+	//		//("%d yyy", ev->cd);
+	//		fprintf(logFile, ".");
+	//		fflush(logFile);
+	//		//Tcl_DeleteEvents(evDelet, 0);
 	//		return 0;
 	//	};
 	//	Tcl_ThreadQueueEvent(mainThr, ev_, TCL_QUEUE_HEAD);

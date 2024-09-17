@@ -53,9 +53,6 @@
     <ClInclude Include="include\json.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="theme.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">

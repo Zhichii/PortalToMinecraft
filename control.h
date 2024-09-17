@@ -14,6 +14,7 @@ std::string textColor;
 std::string secondaryColor;
 std::string hoverColor;
 std::string selectColor;
+BOOL dark = 0;
 typedef int ClrUpdFunc(std::vector<std::string>);
 std::map<std::string, ClrUpdFunc*> colorUpdates;
 std::map<std::string, std::vector<std::string>> clrUpdCd;
@@ -21,9 +22,11 @@ std::vector<std::string> messageBoxes;
 size_t msgBxs = 0;
 FILE* tclScriptLog;
 Tcl_Interp* interp;
+Tk_Window mainWin;
+HWND hWnd;
 std::string call(const std::vector<std::string> strs, bool nolog = 1) {
 	Tcl_Obj** objs = (Tcl_Obj**)(new char[strs.size() * sizeof(Tcl_Obj*)]);
-	il(!nolog) {
+	if (!nolog) {
 		fprintf(tclScriptLog, "> ");
 		for (int i = 0; i < strs.size(); i++) {
 			fprintf(tclScriptLog, "%s ", strs[i].c_str());
@@ -34,7 +37,7 @@ std::string call(const std::vector<std::string> strs, bool nolog = 1) {
 		objs[i] = Tcl_NewStringObj(strs[i].c_str(), (int)strs[i].size());
 		Tcl_IncrRefCount(objs[i]);
 	}
-	il(interp == nullptr) writeLog("[interp] is null. ");
+	if (interp == nullptr) writeLog("[interp] is null. ");
 	Tcl_EvalObjv(interp, (int)strs.size(), objs, 0);
 	const char* result = Tcl_GetStringResult(interp);
 	std::string r = result;
@@ -42,8 +45,8 @@ std::string call(const std::vector<std::string> strs, bool nolog = 1) {
 		Tcl_DecrRefCount(objs[i]);
 	}
 	delete[] objs;
-	il(!nolog) {
-		il(r != "") fprintf(tclScriptLog, "%s\n", r.c_str());
+	if (!nolog) {
+		if (r != "") fprintf(tclScriptLog, "%s\n", r.c_str());
 		fflush(tclScriptLog);
 	}
 	return r;
@@ -93,10 +96,10 @@ static void MyTab(std::string name, std::string textvariable = {}, std::string c
 static void MyTabY(std::string name, std::string textvariable = {}, std::string command = {}) {
 	control(name, "ttk::label");
 	call({ name,"config","-textvariable",textvariable });
-	call({ name,"config","-image","tabImageY","-compound","center","-foreground","white" });
+	call({ name,"config","-image","tabYImage","-compound","center","-foreground","white" });
 	call({ "bind",name,"<Button-1>",command });
-	call({ "bind",name,"<Enter>",name + " config -image tabImageYActive" });
-	call({ "bind",name,"<Leave>",name + " config -image tabImageY" });
+	call({ "bind",name,"<Enter>",name + " config -image tabYImageActive" });
+	call({ "bind",name,"<Leave>",name + " config -image tabYImage" });
 }
 
 struct MyScrollBar {
@@ -156,13 +159,13 @@ struct MyScrollBar {
 };
 
 char toHex(int a) {
-	il(a >= 0xa) return a - 0xa + 'a';
-	ol return a + '0';
+	if (a >= 0xa) return a - 0xa + 'a';
+	ef return a + '0';
 }
 int toNum(char a) {
-	il(a >= 'a' && a <= 'f') return a - 'a' + 0xa;
-	el(a >= 'A' && a <= 'F') return a - 'A' + 0xa;
-	ol return a - '0';
+	if (a >= 'a' && a <= 'f') return a - 'a' + 0xa;
+	lf(a >= 'A' && a <= 'F') return a - 'A' + 0xa;
+	ef return a - '0';
 }
 
 template <class T>
@@ -187,7 +190,7 @@ struct LinkList {
 		tail = nullptr;
 	}
 	void addEnd(T val) {
-		il(this->head == nullptr) {
+		if (this->head == nullptr) {
 			this->head = new Node<T>();
 			this->head->prev = nullptr;
 			this->head->value = val;
@@ -204,12 +207,12 @@ struct LinkList {
 			this->sz++;
 	}
 	void delEnd() {
-		il(this->tail == nullptr || this->head == nullptr) {
+		if (this->tail == nullptr || this->head == nullptr) {
 			this->head = nullptr;
 			this->tail = nullptr;
 			return;
 		}
-		il(this->head == this->tail) {
+		if (this->head == this->tail) {
 			this->~LinkList();
 		}
 		else {
@@ -230,17 +233,17 @@ struct LinkList {
 		}
 	}
 	static void swap(Node<T>* a, Node<T>* b) {
-		il(a->prev != nullptr)  a->prev->next = b;
-		il(a->next != nullptr)  a->next->prev = b;
-		il(b->prev != nullptr)  b->prev->next = a;
-		il(b->next != nullptr)  b->next->prev = a;
+		if (a->prev != nullptr)  a->prev->next = b;
+		if (a->next != nullptr)  a->next->prev = b;
+		if (b->prev != nullptr)  b->prev->next = a;
+		if (b->next != nullptr)  b->next->prev = a;
 		auto aP = a->prev, aN = a->next;
 		a->prev = b->prev; a->next = b->next;
 		b->prev = aP;      b->next = aN;
-		il(this->head == a) this->head = b;
-		el(this->head == b) this->head = a;
-		il(this->tail == a) this->tail = b;
-		el(this->tail == b) this->tail = a;
+		if (this->head == a) this->head = b;
+		lf(this->head == b) this->head = a;
+		if (this->tail == a) this->tail = b;
+		lf(this->tail == b) this->tail = a;
 	}
 	~LinkList() {
 		Node<T>* cur = this->head;
@@ -265,19 +268,24 @@ struct LinkList {
 };
 
 struct MyList {
-	const static size_t fieldOfView=8;
-	size_t offset;
+	const /*static*/ std::string sHei = "68";
+	const static size_t pItm = 68;
+	const static size_t iFov = 8;
+	const static size_t pFov = 8*pItm;
+	size_t move;
 	long long selection;
 	bool enabled;
 	bool selEnabled;
 	bool lock = false;
 	size_t width;
 	size_t height;
+	long long velocity;
 	std::string frameid;
 	struct ItemRecord {
 		std::string text;
 		std::string imageId;
 		std::string ctrlId;
+		std::string holdId;
 		MyList* self;
 		bool* enabled;
 		size_t order;
@@ -286,8 +294,11 @@ struct MyList {
 	};
 	LinkList<ItemRecord> owned;
 	std::string scroll;
-	MyList(std::string frameId, std::string scrollbarId="", bool select_able=true, int width = 43) {
-		this->offset = 0;
+	std::mutex scrolling;
+	std::mutex writingScroll;
+	MyList(std::string frameId, std::string scrollbarId="", bool select_able=true, int width = 500) {
+		this->move = 0;
+		this->velocity = 0;
 		this->selection = 0;
 		this->enabled = true;
 		this->width = width;
@@ -295,12 +306,13 @@ struct MyList {
 		this->frameid = frameId;
 		this->scroll = scrollbarId;
 		this->selEnabled = select_able;
+		control(frameId, "frame");
+		control(frameId+".content", "frame");
 		CreateCmd(frameId+".yview", [](ClientData clientData, Tcl_Interp* interp, int argc, const char** argv)->int {
 			MyList* x = (MyList*)clientData;
 			x->yview(argv[1], atoi(argv[2]), (argc==4)?atoi(argv[3]):0);
 			return 0;
 			}, this);
-		control(frameId, "frame", {"-width",std::to_string(width),"-relief","raised"});
 		colorUpdates[frameId] = [](std::vector<std::string> cd)->int {
 			MyList* self = (MyList*)std::atoll(cd[0].c_str());
 			self->colorUpdate();
@@ -310,8 +322,7 @@ struct MyList {
 		CreateCmd(frameId+".mw", [](ClientData clientData,
 			Tcl_Interp* interp, int argc, const char* argv[])->int {
 				MyList* t = (MyList*)clientData;
-				int delta = atoi(argv[1]);
-				t->yview("scroll", ((delta<0)*2-1)*1, 0);
+				t->yview("scroll", atoll(argv[1]), 0);
 				return 0;
 		}, this);
 		CreateCmd(frameId+".b1", [](ClientData clientData,
@@ -319,7 +330,7 @@ struct MyList {
 				MyList* list = (MyList*)clientData;
 				int item = std::atoi(argv[1]);
 				ItemRecord& ir = list->owned[item];
-				il(list->enabled) {
+				if (list->enabled) {
 					list->userSelect(ir.order);
 				}
 				return 0;
@@ -329,9 +340,9 @@ struct MyList {
 				MyList* list = (MyList*)clientData;
 				int item = std::atoi(argv[1]);
 				ItemRecord& ir = list->owned[item];
-				il(list->enabled) {
-					call({ ir.ctrlId+".image","config","-background",hoverColor });
-					call({ ir.ctrlId+".text","config","-background",hoverColor,"-foreground",textColor });
+				if (list->enabled) {
+					call({ ir.ctrlId+".img","config","-background",hoverColor });
+					call({ ir.ctrlId+".txt","config","-background",hoverColor,"-foreground",textColor });
 					for (int i = 0; i < ir.commands.size(); i += 2) {
 						std::string t3 = ir.ctrlId+".button"+std::to_string(i/2);
 						call({ t3,"config","-image",ir.commands[i],"-background",hoverColor });
@@ -342,140 +353,189 @@ struct MyList {
 		CreateCmd(frameId+".leave", [](ClientData clientData,
 			Tcl_Interp* interp, int argc, const char* argv[])->int {
 				MyList* list = (MyList*)clientData;
-				il(list->enabled) {
-					list->colorUpdate();
+				int item = std::atoi(argv[1]);
+				ItemRecord& ir = list->owned[item];
+				if (list->enabled) {
+					if (list->selEnabled && item == list->selection) {
+						call({ ir.ctrlId+".img","config","-background",selectColor });
+						call({ ir.ctrlId+".txt","config","-background",selectColor,"-foreground",textColor });
+						for (int i = 0; i < ir.commands.size(); i += 2) {
+							std::string t3 = ir.ctrlId+".button"+std::to_string(i/2);
+							call({ t3,"config","-image",ir.commands[i],"-background",selectColor });
+						}
+					}
+					else {
+						call({ ir.ctrlId+".img","config","-background",primaryColor });
+						call({ ir.ctrlId+".txt","config","-background",primaryColor,"-foreground",textColor });
+						for (int i = 0; i < ir.commands.size(); i += 2) {
+							std::string t3 = ir.ctrlId+".button"+std::to_string(i/2);
+							call({ t3,"config","-image","blankImage","-background",primaryColor});
+						}
+					}
 				}
 				return 0;
 		}, this);
 	}
 	void colorUpdate() {
-		il(this->offset < 0) this->offset = 0;
+		if (this->move < 0) this->move = 0;
 		for (int i = 0; i < this->owned.size(); i++) {
-			std::string t1 = this->owned[i].ctrlId;
-			std::string t2 = t1 + ".image";
-			std::string t22 = t1 + ".text";
-			il(this->selEnabled && i==this->selection) {
-				call({ t2,"config","-background",selectColor });
-				call({ t22,"config","-background",selectColor,"-foreground",textColor });
+			std::string wPar = this->owned[i].ctrlId;
+			std::string wImg = wPar + ".img";
+			std::string wTxt = wPar + ".txt";
+			if (this->selEnabled && i==this->selection) {
+				call({ wImg,"config","-background",selectColor });
+				call({ wTxt,"config","-background",selectColor,"-foreground",textColor });
 				for (int j = 0; j < this->owned[i].commands.size(); j += 2) {
-					std::string t3 = t1+".button"+std::to_string(j/2);
-					call({ t3,"config","-image", "blankImage","-background",selectColor });
+					std::string wBtn = wPar+".button"+std::to_string(j/2);
+					call({ wBtn,"config","-image", "blankImage","-background",selectColor });
 				}
 			}
 			else {
-				call({ t2,"config","-background",primaryColor });
-				call({ t22,"config","-background",primaryColor,"-foreground",textColor });
+				call({ wImg,"config","-background",primaryColor });
+				call({ wTxt,"config","-background",primaryColor,"-foreground",textColor });
 				for (int j = 0; j < this->owned[i].commands.size(); j += 2) {
-					std::string t3 = t1+".button"+std::to_string(j/2);
-					call({ t3,"config","-image", "blankImage","-background",primaryColor });
+					std::string wBtn = wPar+".button"+std::to_string(j/2);
+					call({ wBtn,"config","-image", "blankImage","-background",primaryColor });
 				}
 			}
 		}
 	}
 	void update() {
 		colorUpdate();
-		for (int j = 0; j < this->owned.size(); j ++) {
-			il(j >= this->offset && j < this->offset + this->fieldOfView) {
-				call({ "grid",this->owned[j].ctrlId,"-row",std::to_string(j) });
+		size_t offset = floor(this->move * 1. / pItm);
+		size_t i = 0;
+		for (size_t j = 0; j < this->owned.size(); j ++) {
+			if (j >= offset && j < offset + iFov) {
+				call({ "grid",this->owned[j].holdId,"-row",std::to_string(i) });
+				i++;
 			} else {
-				call({ "grid","forget",this->owned[j].ctrlId });
+				call({ "grid","forget",this->owned[j].holdId });
 			}
 		}
+		call({ "place",this->frameid+".content","-x","0","-y",std::to_string(-((long long)this->move)) });
+		call({ "raise",this->frameid+".content" });
 	}
 	void userSelect(size_t item) {
 		this->selection = item;
-		il(selEnabled) this->colorUpdate();
+		if (selEnabled) this->colorUpdate();
 		call({ this->frameid+".enter", std::to_string(this->owned[item].order) });
 	}
 	void select(size_t item) {
 		this->selection = item;
-		il(selEnabled) this->colorUpdate();
+		if (selEnabled) this->colorUpdate();
 	}
 	void add(std::string text, std::string imageId = {}, std::vector<std::string> functions = {}) {
 		this->selection = 0;
-		std::string t1 = this->frameid+"."+std::to_string(this->owned.size());
-		std::string t2 = t1+".image";
-		std::string t22 = t1+".text";
+		std::string wPar = this->frameid+".content."+std::to_string(this->owned.size());
+		std::string wImg = wPar+".img";
+		std::string wTxt = wPar+".txt";
+		std::string wHol = this->frameid+"."+std::to_string(this->owned.size())+"hold";
 		ItemRecord ir;
 		ir.self = this;
 		ir.enabled = &(this->enabled);
 		ir.order = this->owned.size();
 		ir.text = text;
 		ir.imageId = imageId;
-		ir.ctrlId = t1;
+		ir.ctrlId = wPar;
+		ir.holdId = wHol;
 		ir.commands = functions;
 		ir.color = primaryColor;
 		this->owned.addEnd(ir);
-		control(t1, "frame", {"-width",std::to_string(this->width),"-relief","raised"});
-		il(imageId != "") {
-			il(imageId != "<canvas>") {
-				control(t2, "ttk::label", { "-image",imageId,"-compound","center" });
-			}
-			ol{
-				control(t2,"canvas",{"-height","68","-width","68","-highlightthickness","0","-background",primaryColor});
-				call({ t2,"create","rect","2","2","66","66","-fill","#000000","-outline","" });
-			}
-			call({ "pack",t2,"-side","left" });
-			call({ "bind",t2,"<MouseWheel>", this->frameid + ".mw %D" });
-			call({ "bind",t2,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
+		control(wPar, "frame");
+		if (imageId != "<canvas>") {
+			control(wImg, "ttk::label", { "-image",(imageId=="")?"horizontalImage":imageId,"-compound","center"});
 		}
-		size_t wid = this->width-functions.size()*316/100-3*(imageId!="");
-		control(t22,"ttk::label",{"-image","horizontalImage","-compound","left","-text",text,"-width",std::to_string(wid)});
-		call({ "bind",t22,"<MouseWheel>",this->frameid+".mw %D" });
-		call({ "bind",t22,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
-		call({ "bind",t1,"<Enter>",		 this->frameid+".enter "+std::to_string(ir.order) });
-		call({ "bind",t1,"<Leave>",		 this->frameid+".leave "+std::to_string(ir.order) });
-		call({ "pack",t22,"-side","left","-fill","y" });
+		ef {
+			control(wImg,"canvas",{"-height",sHei,"-width",sHei,"-highlightthickness","0","-background",primaryColor});
+			call({ wImg,"create","rect","2","2","66","66","-fill","#000000","-outline","" });
+		}
+		call({ "pack",wImg,"-side","left" });
+		call({ "bind",wImg,"<MouseWheel>",	this->frameid + ".mw %D" });
+		call({ "bind",wImg,"<Button-1>",	this->frameid+".b1 "+std::to_string(ir.order) });
+		size_t wid = this->width - 34 * functions.size() - pItm * (imageId != "");
+		control(wTxt,"labelframe",{"-bd","0","-labelanchor","w","-height",sHei,"-text",text,"-width",std::to_string(wid)});
+		control(wHol,"labelframe",{"-height",sHei,"-width",std::to_string(this->width) });
+		call({ "bind",wTxt,"<MouseWheel>",this->frameid+".mw %D" });
+		call({ "bind",wTxt,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
+		call({ "bind",wPar,"<Enter>",		 this->frameid+".enter "+std::to_string(ir.order) });
+		call({ "bind",wPar,"<Leave>",		 this->frameid+".leave "+std::to_string(ir.order) });
+		call({ "pack",wTxt,"-side","left","-fill","y" });
 		for (int i = functions.size()-2; i >= 0; i -= 2) {
-			std::string t3 = t1 + ".button" + std::to_string(i/2);
-			MyButtonIconActive(t3, "", functions[i], functions[i+1], 0, primaryColor);
-			call({ t3,"config","-image","blankImage","-background",primaryColor });
-			call({ "bind",t3,"<MouseWheel>",this->frameid+".mw %D" });
-			call({ "pack",t3,"-side","right" });
+			std::string wBtn = wPar + ".button" + std::to_string(i/2);
+			MyButtonIconActive(wBtn, "", functions[i], functions[i+1], 0, primaryColor);
+			call({ wBtn,"config","-image","blankImage","-background",primaryColor });
+			call({ "bind",wBtn,"<MouseWheel>",this->frameid+".mw %D" });
+			call({ "pack",wBtn,"-side","right" });
 		}
+		call({ "grid",wPar,"-row",std::to_string(this->owned.size()) });
 		this->update();
 	}
 	void bind(size_t index, std::string seq, std::string cmdId) {
-		il(index < 0 || index >= this->owned.size()) return;
-		call({ "bind",this->frameid+"."+std::to_string(index)+".text",seq,cmdId});
-		il(seq != "<Button-1>" &&
+		if (index < 0 || index >= this->owned.size()) return;
+		call({ "bind",this->owned[index].ctrlId+".txt",seq,cmdId});
+		if (seq != "<Button-1>" &&
 			seq != "<Enter>" &&
 			seq != "<Leave>") return;
 	}
 	void yview(std::string cmd, long long first, long long second) {
-		first = first * 3 / 2;
-		il(cmd == "scroll") {
-			il(first < 0 && this->offset < -first) this->offset = 0;
-			ol this->offset += first;
+		// Caculate this->move. 
+		if (cmd == "scroll") {
+			writingScroll.lock();
+			this->velocity += first * -1 / 5;
+			writingScroll.unlock();
 		}
-		il(cmd == "moveto") {
-			this->offset = this->owned.size()-this->fieldOfView;
-			il(second != 0) {
-				size_t t = first*this->owned.size()/second;
-				il(t < (this->owned.size()-this->fieldOfView)) {
-					this->offset = t;
-				}
-			}
+		if (cmd == "moveto") {
+			writingScroll.lock();
+			this->velocity = 0;
+			writingScroll.unlock();
+			this->move = 0;
+			if (second != 0) this->move = first * this->owned.size() * pItm / second;
 		}
-		il(this->offset+this->fieldOfView > this->owned.size()) {
-			il(this->owned.size() <= this->fieldOfView) this->offset = 0;
-			ol this->offset = this->owned.size() - this->fieldOfView;
-		}
-		this->update();
-		long long hl = atoi(call({ "winfo","height",this->scroll }).c_str())-6;
-		il(hl < 0) hl = 0;
+		if (!this->scrolling.try_lock()) return;
+		size_t max = this->owned.size() * pItm - pFov;
+		if (this->owned.size() * pItm < pFov) max = 0;
+		// Caculate scrollbar size. 
+		long long hl = atoll(call({ "winfo","height",this->scroll }).c_str()) - 6;
+		if (hl < 0) hl = 0;
 		size_t h = hl;
-		il(this->scroll == "") return;
-		size_t pos = 0;
+		if (this->scroll == "") return;
 		size_t siz = h;
-		il(this->owned.size() != 0) {
-			pos = (this->offset * h) / this->owned.size();
-			siz = (this->fieldOfView * h) / this->owned.size();
+		size_t pos = 0;
+		if (this->owned.size() != 0) {
+			pos = this->move * h / pItm / this->owned.size();
+			siz = this->iFov * h / this->owned.size();
 		}
-		il(pos < 0) pos = 0;
-		il(pos+siz > h-5) siz = h-pos-5;
-		call({ "place",this->scroll+".x","-y",std::to_string(pos+5) });
-		call({ this->scroll+".x","config","-height",std::to_string(siz) });
+		if (pos + siz + 5 > h) siz = h - pos - 5;
+		call({ this->scroll + ".x","config","-height",std::to_string(siz) });
+		// Scroll
+		do {
+			writingScroll.lock(); {
+				if (this->velocity < 0) {
+					if (this->move > -velocity) this->move += velocity;
+					ef{
+						this->velocity = 0;// -this->velocity * 0.125;
+						this->move = 0;
+					}
+				}
+				ef{
+					if (this->move + velocity <= max) this->move += velocity;
+					ef{
+						this->velocity = 0;// -this->velocity * 0.125;
+						this->move = max;
+					}
+				}
+				if (this->velocity > 0) this->velocity--;
+				if (this->velocity < 0) this->velocity++;
+			} writingScroll.unlock();
+			call({ "place",this->frameid+".content","-x","0","-y",std::to_string(-((long long)this->move)) });
+			if (this->owned.size() != 0) pos = this->move * h / pItm / this->owned.size(); 
+			call({ "place",this->scroll + ".x","-y",std::to_string(pos + 5) });
+			RedrawWindow(hWnd, NULL, NULL, RDW_VALIDATE);
+			call({ "update" });
+			UpdateWindow(hWnd);
+			Tcl_Sleep(5);
+		} while (this->velocity != 0);
+		this->scrolling.unlock();
 	}
 	size_t index() { return this->selection; }
 	ItemRecord get(size_t ind) {
@@ -487,17 +547,17 @@ struct MyList {
 	void clear() {
 		LinkList<ItemRecord>::Node<ItemRecord>* cur = this->owned.head;
 		while(cur!=nullptr) {
-			std::string t1 = cur->value.ctrlId;
-			std::string t2 = t1 + ".image";
-			std::string t22 = t1 + ".text";
-			std::string t3;
-			call({ "destroy",t22 });
-			call({ "destroy",t2 });
-			for (int i = 0; i < cur->value.commands.size(); i += 2) {
-				t3 = t1+".button"+std::to_string(i / 2);
-				call({ "destroy",t3 });
-			}
-			call({ "destroy",t1 });
+			std::string wPar = cur->value.ctrlId;
+			//std::string wImg = wPar + ".img";
+			//std::string wTxt = wPar + ".txt";
+			//std::string wBtn;
+			//call({ "destroy",wTxt });
+			//call({ "destroy",wImg });
+			//for (int i = 0; i < cur->value.commands.size(); i += 2) {
+			//	wBtn = wPar+".button"+std::to_string(i / 2);
+			//	call({ "destroy",wBtn });
+			//}
+			call({ "destroy",wPar });
 			auto next = cur->next;
 			delete cur;
 			cur = next;
@@ -526,11 +586,26 @@ struct MyEdit {
 	}
 };
 
+void turnDark(std::string name) {
+	if (call({ "winfo","exists",name }) == "0") return;
+	call({ "update" });
+	HWND hWnd = GetParent((HWND)strtoull(call({ "winfo","id",name }).c_str(), nullptr, 16));
+	DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+	std::string curGeo = call({ "wm","geometry",name });
+	std::string curGeo2 = curGeo;
+	size_t pos = Strings::find(curGeo, "+")[0] - 1;
+	if (curGeo2[pos] == '0') curGeo2[pos] = '1';
+	else curGeo2[pos]--;
+	call({ "wm","geometry",name,curGeo2 });
+	call({ "update" });
+	call({ "wm","geometry",name,curGeo });
+}
+
 int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	msgBxs++;
-	std::string name = ".window" + std::to_string(msgBxs);
+	std::string name = ".w" + std::to_string(msgBxs);
 	messageBoxes.push_back(name);
-	call({ "toplevel",name });
+	call({ "toplevel",name },0);
 	std::string title = argv[1];
 	std::string content = argv[2];
 	std::string level = argv[3];
@@ -543,22 +618,23 @@ int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 	call({ name + ".ok","config","-command","destroy " + name });
 	call({ "grid",name + ".text" });
 	call({ "grid",name + ".ok" });
+	turnDark(name);
 	return 0;
 }
 
-int mRGB(unsigned char r, unsigned char g, unsigned char b) {
-	return ((int)r) << 24 | ((int)g) << 16 | ((int)b) << 8 | (255) << 0;
+int mRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+	return ((int)r) << 24 | ((int)g) << 16 | ((int)b) << 8 | ((int)a) << 0;
 }
-unsigned char gR(int clr) { return clr > 24 % 0xff; }
-unsigned char gG(int clr) { return clr > 16 % 0xff; }
-unsigned char gB(int clr) { return clr > 8 % 0xff; }
-unsigned char gA(int clr) { return clr > 0 % 0xff; }
-struct Image {
-	Tk_PhotoImageBlock blk;
-	Image(int wid, int hei) {
-		this->blk.width = wid;
-		this->blk.height = hei;
-	}
-};
+unsigned char gR(int clr) { return (clr > 24) % 0xff; }
+unsigned char gG(int clr) { return (clr > 16) % 0xff; }
+unsigned char gB(int clr) { return (clr > 8 ) % 0xff; }
+unsigned char gA(int clr) { return (clr > 0 ) % 0xff; }
+//struct Image {
+//	Tk_PhotoImageBlock blk;
+//	Image(int wid, int hei) {
+//		this->blk.width = wid;
+//		this->blk.height = hei;
+//	}
+//};
 
 #endif // RIVERLAUNCHER3_CONTROL_H

@@ -29,7 +29,7 @@ public:
 			this->u = json["url"].asString();
 			this->h = json["sha1"].asString();
 			this->s = json["size"].asInt64();
-			il(json.isMember("path"))
+			if(json.isMember("path"))
 				this->p = json["path"].asString();
 		}
 		[[nodiscard]] std::string url() const { return this->u; }
@@ -62,13 +62,13 @@ public:
 		}
 		Rule(Json::Value json) {
 			this->a = (json["action"] == "allow") && (json["action"] != "disallow");
-			il(json.isMember("os")) {
-				il(json["os"].isMember("name"))
+			if(json.isMember("os")) {
+				if(json["os"].isMember("name"))
 					this->on = json["os"]["name"].asString();
-				il(json["os"].isMember("version"))
+				if(json["os"].isMember("version"))
 					this->ov = json["os"]["version"].asString();
 			}
-			il(json.isMember("features")) {
+			if(json.isMember("features")) {
 				for (const std::string& i : json["features"].getMemberNames()) {
 					f[i]=json["features"][i].asBool();
 				}
@@ -76,31 +76,31 @@ public:
 		}
 		[[nodiscard]] bool isAllow(std::vector<Feature> features) {
 			bool allow = 0;
-			il(this->on == SYS_NAME || this->on == "") allow = 1;
-			il(!this->a) allow = !allow;
+			if(this->on == SYS_NAME || this->on == "") allow = 1;
+			if(!this->a) allow = !allow;
 			for (auto& i : this->f) {
 				bool found = false;
 				bool v = false;
 				for (auto& j : features) {
-					il(j.getName() == i.first) {
+					if(j.getName() == i.first) {
 						found = true;
 						v = j.getValue();
 						break;
 					}
 				}
-				//il(i.second) {
-				//	il(!found) allow &= 0;
-				//	el(v) allow &= 1;
-				//	ol allow &= 0;
+				//if(i.second) {
+				//	if(!found) allow &= 0;
+				//	lf(v) allow &= 1;
+				//	ef allow &= 0;
 				//}
-				//ol {
-				//	il(!found) allow &= 1;
-				//	el(v) allow &= 0;
-				//	ol allow &= 1;
+				//ef {
+				//	if(!found) allow &= 1;
+				//	lf(v) allow &= 0;
+				//	ef allow &= 1;
 				//}
-				il(!found) allow &= !i.second;
-				el(v) allow &= i.second;
-				ol allow &= !i.second;
+				if(!found) allow &= !i.second;
+				lf(v) allow &= i.second;
+				ef allow &= !i.second;
 			}
 			return allow;
 		}
@@ -114,33 +114,33 @@ public:
 	public:
 		LibraryItem(Json::Value json) {
 			this->n = json["name"].asString();
-			il(json.isMember("natives")) {
+			if(json.isMember("natives")) {
 				std::vector<std::string> n = json["natives"].getMemberNames();
 				for (const std::string& i : n) {
 					this->nn[i] = json["natives"][i].asString();
 				}
 			}
-			il(json.isMember("downloads")) {
-				il(json["downloads"].isMember("artifact")) {
+			if(json.isMember("downloads")) {
+				if(json["downloads"].isMember("artifact")) {
 					this->a = json["downloads"]["artifact"];
 				}
-				il(json["downloads"].isMember("classifiers")) {
+				if(json["downloads"].isMember("classifiers")) {
 					for (const auto& i : this->nn) {
 						this->cn[i.second] = json["downloads"]["classifiers"][i.second];
 					}
 				}
 			}
-			il(json.isMember("rules")) {
+			if(json.isMember("rules")) {
 				for (const auto& i : json["rules"]) {
 					this->r.push_back(i);
 				}
 			}
 		}
 		bool tryExtractNatives(std::wstring gameDir, std::wstring nativePath) {
-			il(this->nn.size()==0) return false;
+			if(this->nn.size()==0) return false;
 			std::wstring temp = gameDir + L"libraries\\" + Strings::s2ws(this->cn[this->nn[SYS_NAME]].path());
 			for (auto& i : temp) {
-				il(temp[i] == O_LPATHSEP[0]) temp[i] = LPATHSEP[0];
+				if(temp[i] == O_LPATHSEP[0]) temp[i] = LPATHSEP[0];
 			}
 			HZIP hZip = OpenZip(temp.c_str(), NULL);
 			ZIPENTRY ze;
@@ -150,7 +150,7 @@ public:
 			for (int i = 0; i < nums; i++) {
 				GetZipItem(hZip, i, &ze);
 				int len = lstrlenW(ze.name);
-				il(ze.name[len - 1] == L'l' && ze.name[len - 2] == L'l' && ze.name[len - 3] == L'd' && ze.name[len - 4] == L'.')
+				if(ze.name[len - 1] == L'l' && ze.name[len - 2] == L'l' && ze.name[len - 3] == L'd' && ze.name[len - 4] == L'.')
 					UnzipItem(hZip, i, ze.name);
 			}
 			CloseZip(hZip);
@@ -164,34 +164,34 @@ public:
 		}
 		std::string finalLibPath() {
 			std::string libPath;
-			il(this->a.path() != "") {
+			if(this->a.path() != "") {
 				libPath = Strings::strFormat("libraries\\%s", this->a.path().c_str());
-				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
+				for (char& i : libPath) if(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
-			el(this->nn.size() > 0) {
+			lf(this->nn.size() > 0) {
 				libPath = Strings::strFormat("libraries\\%s", this->cn[this->nn[SYS_NAME]].path().c_str());
-				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
+				for (char& i : libPath) if(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
-			ol{
+			ef{
 				std::vector<std::string> libNameSplit = Strings::split(this->n,":");
 				libPath = this->n;
 				bool f = 1;
 				for (char& i : libPath) {
-					il(f && i=='.') i = PATHSEP[0];
-					il(i==':') {
+					if(f && i=='.') i = PATHSEP[0];
+					if(i==':') {
 						f = 0;
 						i = PATHSEP[0];
 					}
 				}
 				libPath = Strings::strFormat("libraries\\%s\\%s-%s.jar",
 					libPath.c_str(), libNameSplit[1].c_str(), libNameSplit[2].c_str());
-				for (char& i : libPath) il(i == O_PATHSEP[0]) i = PATHSEP[0];
+				for (char& i : libPath) if(i == O_PATHSEP[0]) i = PATHSEP[0];
 			}
 			return libPath;
 		}
 		bool allow(std::vector<Rule::Feature> features) {
 			for (Rule& i : r) {
-				il(!i.isAllow(features)) {
+				if(!i.isAllow(features)) {
 					return false;
 				}
 			}
@@ -203,14 +203,14 @@ public:
 		std::vector<Rule> r;
 	public:
 		ArgumentItem(Json::Value json) {
-			il(json.type() == Json::stringValue) {
+			if(json.type() == Json::stringValue) {
 				this->v = { json.asString() };
 			}
-			ol {
+			ef {
 				for (const auto& i : json["value"]) {
 					this->v.push_back(i.asString());
 				}
-				il(json.isMember("rules")) {
+				if(json.isMember("rules")) {
 					for (const auto& i : json["rules"]) {
 						this->r.push_back(i);
 					}
@@ -219,7 +219,7 @@ public:
 		}
 		[[nodiscard]] bool allow(std::vector<Rule::Feature> features) {
 			for (Rule& i : this->r) {
-				il(!i.isAllow(features)) {
+				if(!i.isAllow(features)) {
 					return false;
 				}
 			}
@@ -239,7 +239,7 @@ public:
 		this->init(info);
 	}
 	~VersionInfo() {
-		il(this->patches!=nullptr) {
+		if(this->patches!=nullptr) {
 			delete this->patches;
 			this->patches = nullptr;
 		}
@@ -260,7 +260,7 @@ public:
 		writeLog("Generating launching command: %s, \"%s\". ", this->getId().c_str(), gameDir.c_str());
 		std::string versionPath = "versions"; versionPath += PATHSEP + this->getId() + PATHSEP + this->getId();
 		std::string nativePath = gameDir + versionPath + "-natives\\";
-		il(!isDir(nativePath)) SHCreateDirectoryExA(NULL, nativePath.c_str(), NULL);
+		if(!isDir(nativePath)) SHCreateDirectoryExA(NULL, nativePath.c_str(), NULL);
 		writeLog("Generating classpath. ");
 		std::string cp = this->genClasspath(gameDir, versionPath, nativePath, features);
 		writeLog("Classpath is ready. ");
@@ -297,7 +297,7 @@ public:
 		std::string jvmArgs = this->genJvmArgs(features, jvmVals);
 		writeLog("Generating game arguments. ");
 		std::string gameArgs = this->genGameArgs(features, gameVals);
-		il(gameArgs == "") {
+		if(gameArgs == "") {
 			call({ "msgbx","error","minecraft.no_args","error" });
 			writeLog("Failed to generate game arguments. ");
 			cmd = L"";
@@ -306,10 +306,10 @@ public:
 		writeLog("Connecting the arguments. ");
 		std::string output(16384,'\0');
 		output = QUOT + finalJava + QUOT;
-		il(Strings::count(jvmArgs, "-Djava.library.path") == 0) {
+		if(Strings::count(jvmArgs, "-Djava.library.path") == 0) {
 			output += " \"-Djava.library.path="+versionPath+"-natives\"";
 		}
-		il(this->getLoggingArgument() != "") {
+		if(this->getLoggingArgument() != "") {
 			output += " " + Strings::replace(this->getLoggingArgument(),
 				"${path}", std::string{}+QUOT+"versions"+PATHSEP+this->getId()+PATHSEP+this->getLoggingId()+QUOT);
 		}
@@ -326,7 +326,7 @@ protected:
 		std::wstring gameDirW = Strings::s2ws(gameDir);
 		std::wstring nativePathW = Strings::s2ws(nativePath);
 		for (auto& i : this->getLibraries()) {
-			il(i.allow(features)) {
+			if(i.allow(features)) {
 				if (i.tryExtractNatives(gameDirW, nativePathW)) continue;
 				available[i.libName()] = i.finalLibPath();
 			}
@@ -340,7 +340,7 @@ protected:
 	std::string genJvmArgs(const std::vector<Rule::Feature>& features, std::map<std::string,std::string>& jvmVals) {
 		std::vector<std::string> jvmArgVec;
 		for (auto& i : this->getJvmArguments()) {
-			il(i.allow(features)) {
+			if(i.allow(features)) {
 				for (auto& j : i.value()) {
 					std::string k = j;
 					auto l = Strings::split(k, "=");
@@ -350,8 +350,8 @@ protected:
 					k = Strings::join(l, "=");
 					k = Strings::replace(k, "\\", "\\\\");
 					k = Strings::replace(k, "\"", "\\\"");
-					il(Strings::count(k, " ")) jvmArgVec.push_back(QUOT+k+QUOT);
-					ol jvmArgVec.push_back(k);
+					if(Strings::count(k, " ")) jvmArgVec.push_back(QUOT+k+QUOT);
+					ef jvmArgVec.push_back(k);
 				}
 			}
 		}
@@ -363,67 +363,67 @@ protected:
 		bool flagForge = false;
 		bool flagOptiFine = false;
 		bool flag__tweakClass = false;
-		il(this->getGameArguments().size() > 0) {
+		if(this->getGameArguments().size() > 0) {
 			std::vector<std::string> gameArgVec;
 			for (auto& i : this->getGameArguments()) {
-				il(i.allow(features)) {
+				if(i.allow(features)) {
 					for (auto& j : i.value()) {
 						std::string k = j;
-						il(gameVals.contains(k)) k = gameVals[k];
-						il(k == "--tweakClass") {
+						if(gameVals.contains(k)) k = gameVals[k];
+						if(k == "--tweakClass") {
 							flag__tweakClass = true;
 							continue;
 						}
-						il(flag__tweakClass && k=="net.minecraftforge.fml.common.launcher.FMLTweaker") {
+						if(flag__tweakClass && k=="net.minecraftforge.fml.common.launcher.FMLTweaker") {
 							gameArgVec.push_back("--tweakClass");
 							flagForge = true;
 							flag__tweakClass = false;
 						}
-						il(flag__tweakClass && k=="optifine.OptiFineForgeTweaker") {
+						if(flag__tweakClass && k=="optifine.OptiFineForgeTweaker") {
 							flagOptiFineForge = true;
 							flag__tweakClass = false;
 							continue;
 						}
-						il(flag__tweakClass&& k == "optifine.OptiFineForgeTweaker") {
+						if(flag__tweakClass&& k == "optifine.OptiFineForgeTweaker") {
 							flagOptiFine = true;
 							flag__tweakClass = false;
 							continue;
 						}
 						k = Strings::replace(k, "\\", "\\\\");
 						k = Strings::replace(k, "\"", "\\\"");
-						il(Strings::count(k, " ")) gameArgVec.push_back(QUOT+k+QUOT);
-						ol gameArgVec.push_back(k);
+						if(Strings::count(k, " ")) gameArgVec.push_back(QUOT+k+QUOT);
+						ef gameArgVec.push_back(k);
 					}
 				}
 			}
 			// If I do not do this, it seemed to be crash. 
-			il((flagOptiFine&&flagForge)||flagOptiFineForge) {
+			if((flagOptiFine&&flagForge)||flagOptiFineForge) {
 				gameArgVec.push_back("--tweakClass");
 				gameArgVec.push_back("optifine.OptiFineForgeTweaker");
 			}
 			gameArg = Strings::join(gameArgVec, " ");
 		}
-		el (this->getLegacyGameArguments() != "") {
+		lf (this->getLegacyGameArguments() != "") {
 			gameArg = this->getLegacyGameArguments();
 			for (const auto& i : gameVals) {
 				std::string k = i.second;
 				k = Strings::replace(k, "\\", "\\\\");
 				k = Strings::replace(k, "\"", "\\\"");
-				il(Strings::count(k, " ")) k = QUOT+k+QUOT;
+				if(Strings::count(k, " ")) k = QUOT+k+QUOT;
 				gameArg = Strings::replace(gameArg, i.first, k);
 			}
-			il(Strings::count(gameArg, " --tweakClass optifine.OptiFineForgeTweaker")) {
+			if(Strings::count(gameArg, " --tweakClass optifine.OptiFineForgeTweaker")) {
 				gameArg = Strings::replace(gameArg, " --tweakClass optifine.OptiFineForgeTweaker", "");
 				gameArg += " --tweakClass optifine.OptiFineForgeTweaker";
 			}
-			el(Strings::count(gameArg, " --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker") != 0) {
-				il(Strings::count(gameArg, " --tweakClass optifine.OptiFineTweaker") != 0) {
+			lf(Strings::count(gameArg, " --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker") != 0) {
+				if(Strings::count(gameArg, " --tweakClass optifine.OptiFineTweaker") != 0) {
 					gameArg = Strings::replace(gameArg, " --tweakClass optifine.OptiFineTweaker", "");
 					gameArg += " --tweakClass optifine.OptiFineForgeTweaker";
 				}
 			}
 		}
-		ol{
+		ef{
 			return "";
 		}
 		return gameArg;
@@ -431,16 +431,16 @@ protected:
 	std::string findJava() {
 		std::string finalJava;
 		int javaVersion = this->getJavaVersion();
-		il(javaVersion > 17) javaVersion = 21;
-		el (javaVersion > 11) javaVersion = 17;
-		ol javaVersion = 8;
+		if(javaVersion > 17) javaVersion = 21;
+		lf (javaVersion > 11) javaVersion = 17;
+		ef javaVersion = 8;
 		std::vector<std::string> javas;
 		for (auto& i : rdata("Javas")) {
 			javas.push_back(i.asString());
 		}
 		int selectedJava = rdata("SelectedJava").asInt();
-		il(selectedJava < 0) {
-			il(selectedJava == -1) {
+		if(selectedJava < 0) {
+			if(selectedJava == -1) {
 				//* Command "where". 
 			}
 			bool flag = 1;
@@ -448,21 +448,21 @@ protected:
 			for (auto& java : javas) {
 				std::string tmpEachJava = execGetOut("\"" + java + "\" GetJavaVersion", "RvL\\");
 				std::vector<std::string> javaInfo = Strings::split(tmpEachJava, "\r\n");
-				il(javaInfo[1] != "64") continue;
+				if(javaInfo[1] != "64") continue;
 				int curVersion = 0;
-				il(javaInfo[0][1] == '.') curVersion = atoi(javaInfo[0].c_str() + 2);
-				ol curVersion = atoi(javaInfo[0].c_str());
-				il(curVersion > 17) curVersion = 21;
-				el (curVersion > 11) curVersion = 17;
-				ol curVersion = 8;
-				il(curVersion == javaVersion) {
+				if(javaInfo[0][1] == '.') curVersion = atoi(javaInfo[0].c_str() + 2);
+				ef curVersion = atoi(javaInfo[0].c_str());
+				if(curVersion > 17) curVersion = 21;
+				lf (curVersion > 11) curVersion = 17;
+				ef curVersion = 8;
+				if(curVersion == javaVersion) {
 					finalJava = java;
 					flag = 0;
 					break;
 				}
 			}
 		}
-		ol {
+		ef {
 			finalJava = javas[selectedJava];
 		}
 		return finalJava;
@@ -477,26 +477,26 @@ protected:
 		this->complianceLevel = info["complianceLevel"].asInt();
 		this->javaVersion = info["javaVersion"]["majorVersion"].asInt();
 		Json::Value downloads = info["downloads"];
-		il(downloads.isMember("client_mappings")) {
+		if(downloads.isMember("client_mappings")) {
 			this->clientMappings = File(downloads["client_mappings"]);
 			this->serverMappings = File(downloads["server_mappings"]);
 		}
 		this->client = File(downloads["client"]);
 		this->server = File(downloads["server"]);
-		il(info.isMember("logging")) {
-			il(info["logging"].isMember("client")) {
+		if(info.isMember("logging")) {
+			if(info["logging"].isMember("client")) {
 				this->loggingFile = File(info["logging"]["client"]["file"]);
 				this->loggingId = info["logging"]["client"]["file"]["id"].asString();
 				this->loggingArgument = info["logging"]["client"]["argument"].asString();
 			}
 		}
-		ol {
+		ef {
 			this->loggingFile = {};
 			this->loggingId = {};
 			this->loggingArgument = {};
 		}
 		this->gameType = info["type"].asString();
-		il(info.isMember("arguments")) {
+		if(info.isMember("arguments")) {
 			for (size_t i = 0; i < info["arguments"]["game"].size(); i ++) {
 				this->gameArguments.push_back(info["arguments"]["game"][(int)i]);
 			}
@@ -504,11 +504,11 @@ protected:
 				this->jvmArguments.push_back(info["arguments"]["jvm"][(int)i]);
 			}
 		}
-		il(info.isMember("minecraftArguments")) {
+		if(info.isMember("minecraftArguments")) {
 			this->legacyGameArguments = info["minecraftArguments"].asString();
 			this->jvmArguments = { Json::Value("-cp"), Json::Value("${classpath}") };
 		}
-		//il(info.isMember("patches") &&
+		//if(info.isMember("patches") &&
 		//	(info["patches"].size() > 0)) {
 		//	this->patches = new VersionInfo(info["patches"][0]);
 		//}

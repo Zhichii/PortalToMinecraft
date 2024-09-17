@@ -29,6 +29,7 @@ int URLGet(const std::string& url, char*&data, size_t&sz) {
 	dat.totalSz = 0;
 	dat.data = {};
 	dat.size = {};
+	data = nullptr;
 	cc = curl_easy_setopt(curlp, CURLOPT_URL, url.c_str());
 	if (cc != CURLE_OK) {
 		writeLog("Getting [%s] failed 1: %d", url.c_str(), cc);
@@ -54,6 +55,9 @@ int URLGet(const std::string& url, char*&data, size_t&sz) {
 		for (const auto& i : dat.data) {
 			delete i;
 		}
+		dat.data = {};
+		dat.size = {};
+		dat.totalSz = {};
 		return 4;
 	}
 	curl_easy_cleanup(curlp);

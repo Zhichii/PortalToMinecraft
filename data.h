@@ -83,6 +83,7 @@ void initData() {
 	if (!data.isMember("Accounts")) data["Accounts"] = Json::arrayValue;
 	if (!data.isMember("SelectedAccount")) data["SelectedAccount"] = 0;
 	if (!data.isMember("Geometry")) data["Geometry"] = "1050x745+100+50";
+	if (!data.isMember("ThemeColor")) data["ThemeColor"] = 0x484848;
 	data["GameDir"] = Strings::formatDirStr(data["GameDir"].asString());
 	saveData();
 }

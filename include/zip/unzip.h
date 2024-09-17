@@ -2867,24 +2867,24 @@ LUFILE* lufopen(void* z, unsigned int len, DWORD flags, ZRESULT* err)
         DWORD res = SetFilePointer(h, 0, 0, FILE_CURRENT);
         canseek = (res != 0xFFFFFFFF);
     }
-    LUFILE* lf = new LUFILE;
+    LUFILE* el = new LUFILE;
     if (flags == ZIP_HANDLE || flags == ZIP_FILENAME)
     {
-        lf->is_handle = true; lf->mustclosehandle = mustclosehandle;
-        lf->canseek = canseek;
-        lf->h = h; lf->herr = false;
-        lf->initial_offset = 0;
-        if (canseek) lf->initial_offset = SetFilePointer(h, 0, NULL, FILE_CURRENT);
+        el->is_handle = true; el->mustclosehandle = mustclosehandle;
+        el->canseek = canseek;
+        el->h = h; el->herr = false;
+        el->initial_offset = 0;
+        if (canseek) el->initial_offset = SetFilePointer(h, 0, NULL, FILE_CURRENT);
     }
     else
     {
-        lf->is_handle = false;
-        lf->canseek = true;
-        lf->mustclosehandle = false;
-        lf->buf = z; lf->len = len; lf->pos = 0; lf->initial_offset = 0;
+        el->is_handle = false;
+        el->canseek = true;
+        el->mustclosehandle = false;
+        el->buf = z; el->len = len; el->pos = 0; el->initial_offset = 0;
     }
     *err = ZR_OK;
-    return lf;
+    return el;
 }
 
 

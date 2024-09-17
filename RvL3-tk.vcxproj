@@ -159,7 +159,6 @@
     <ClInclude Include="net.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="strings.h" />
-    <ClInclude Include="theme.h" />
     <ClInclude Include="thread.h" />
     <ClInclude Include="versioninfo.h" />
   </ItemGroup>
