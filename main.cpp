@@ -154,14 +154,15 @@ void swiPage(std::string page, bool noAnimation) {
 std::vector<std::string> dynamicImages = {
 	"addImage","addImageActive","brightImage","brightImageActive","darkImage","darkImageActive",
 	"editImage","editImageActive","launchImage","launchImageActive",
-	"tabImage","tabImageActive","tabYImage","tabYImageActive"
+	"tabImage","tabImageActive","tabYImage","tabYImageActive","texteditImage","texteditImageActive"
 };
 void colorPhotos(std::string name, 
 	short r1, short g1, short b1,
 	short r2, short g2, short b2,
 	short r3, short g3, short b3,
 	short r4, short g4, short b4,
-	short r5, short g5, short b5
+	short r5, short g5, short b5,
+	short r6, short g6, short b6
 ) {
 	Tk_PhotoHandle ph = Tk_FindPhoto(interp, name.c_str());
 	Tk_PhotoImageBlock blk;
@@ -190,6 +191,13 @@ void colorPhotos(std::string name,
 				stream__[blk.offset[1]] = g5;
 				stream__[blk.offset[2]] = b5;
 			}
+			lf (stream__[blk.offset[0]] == 0x66 &&
+				stream__[blk.offset[1]] == 0x66 &&
+				stream__[blk.offset[2]] == 0x66) {
+				stream__[blk.offset[0]] = r6;
+				stream__[blk.offset[1]] = g6;
+				stream__[blk.offset[2]] = b6;
+			}
 			stream__ += blk.pixelSize;
 		}
 	else
@@ -214,6 +222,13 @@ void colorPhotos(std::string name,
 				stream__[blk.offset[0]] = r5;
 				stream__[blk.offset[1]] = g5;
 				stream__[blk.offset[2]] = b5;
+			}
+			lf (stream__[blk.offset[0]] == 0x66 &&
+				stream__[blk.offset[1]] == 0x66 &&
+				stream__[blk.offset[2]] == 0x66) {
+				stream__[blk.offset[0]] = r6;
+				stream__[blk.offset[1]] = g6;
+				stream__[blk.offset[2]] = b6;
 			}
 			stream__ += blk.pixelSize;
 		}
@@ -479,15 +494,18 @@ int pageMods(ClientData clientData, Tcl_Interp* interp, int argc, const char* ar
 
 int addAccount(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	control(".windowAddAccount", "toplevel");
+	call({ "bind",".windowAddAccount","<KeyPress>","keyGot %k" });
 	call({ "wm","title",".windowAddAccount",currentLanguage->localize("dialog") });
 	control(".windowAddAccount.cancel", "ttk::button", { "-textvariable","cancel","-command","destroy .windowAddAccount" });
 
 	control(".windowAddAccount.legacy", "frame");
 	control(".windowAddAccount.legacy.text", "ttk::label", { "-textvariable","accounts.add.legacy_name" });
 	control(".windowAddAccount.legacy.ok", "ttk::button", { "-textvariable","ok" });
+	MyEdit i(".windowAddAccount.legacy.test");
 	call({ "grid",".windowAddAccount.legacy.text" });
 	call({ "grid",".windowAddAccount.legacy.ok" });
-
+	call({ "grid",".windowAddAccount.legacy.test" });
+	
 	control(".windowAddAccount.selType", "frame");
 	control(".windowAddAccount.selType.text", "ttk::label", { "-textvariable","accounts.add.ask_type" });
 	control(".windowAddAccount.selType.microsoft", "ttk::button", { "-textvariable","accounts.microsoft" });
@@ -646,6 +664,8 @@ void createPhotos() {
 	call({ "image","create","photo","tabImageActive","-file","assets\\ctrl\\tab.png" });
 	call({ "image","create","photo","tabYImage","-file","assets\\ctrl\\tabY.png" });
 	call({ "image","create","photo","tabYImageActive","-file","assets\\ctrl\\tabY.png" });
+	call({ "image","create","photo","texteditImage","-file","assets\\ctrl\\textedit.png" });
+	call({ "image","create","photo","texteditImageActive","-file","assets\\ctrl\\textedit.png" });
 	// Controls v3. 
 	call({ "image","create","photo","buttonxImage","-file","assets\\ctrl\\buttonx.png" });
 	call({ "image","create","photo","buttonxImageActive","-file","assets\\ctrl\\buttonx.png" });
@@ -775,7 +795,8 @@ int main() {
 					  rO,   gO,   bO,
 					 rHL,  gHL,  bHL,
 					  rB,   gB,   bB,
-					  rO,   gO,   bO
+					  rO,   gO,   bO,
+					0xff, 0xff, 0xff
 				);
 				dark = FALSE;
 			}
@@ -790,14 +811,17 @@ int main() {
 					  rO,   gO,   bO,
 					 rHD,  gHD,  bHD,
 					  rB,   gB,   bB,
-					  rB,   gB,   bB
+					  rB,   gB,   bB,
+					0x1f, 0x1f, 0x1f
 				);
 				dark = TRUE;
 			}
 			colorUpdate();
 			std::string img = (primaryColor=="#ffffff")?"brightImage":"darkImage";
 			call({ "bind",".themeButton","<Enter>",".themeButton config -image "+img+"Active" });
+			call({ "bind",".themeButton","<FocusIn>",".themeButton config -image "+img+"Active" });
 			call({ "bind",".themeButton","<Leave>",".themeButton config -image "+img });
+			call({ "bind",".themeButton","<FocusOut>",".themeButton config -image "+img });
 			call({ ".themeButton","config","-image",img+"Active" });
 			std::vector<std::string> names;
 			for (const auto& i : windows) names.push_back(i.first);
@@ -810,6 +834,18 @@ int main() {
 			}
 			return 0;
 		}, 0);
+	CreateCmd("keyGot", [](ClientData clientData,
+		Tcl_Interp* interp, int argc, const char** argv)->int {
+			std::string currentWidget = call({ "focus" });
+			if (call({ currentWidget + ".key",argv[1] },0) == "1") return 0;
+			if (argc == 2) {
+				if (strcmp(argv[1], "32")==0 ||
+					strcmp(argv[1], "13")==0)
+					call({ "eval", call({ "bind",currentWidget,"<ButtonPress-1>" }) });
+			}
+			return 0;
+		}, 0);
+	call({ "bind",".","<KeyPress>","keyGot %k"});
 
 	writeLog("Creating tabs. ");
 	control(".tabs", "frame", { "-width","40" });

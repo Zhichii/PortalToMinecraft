@@ -127,7 +127,7 @@ namespace Strings {
 
 	// Slice the string as Python, but step is always 1. 
 	// Include head without tail. 
-	std::string slice1(const std::string& baseStr, size_t from = 0, size_t to = 0) {
+	std::string slice1(const std::string& baseStr, long long from = 0, long long to = 0) {
 		if (from == to) to = baseStr.size() - to;
 		if (from < 0) from = baseStr.size() + from;
 		if (to <= 0) to = baseStr.size() + to;

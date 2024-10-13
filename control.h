@@ -72,13 +72,17 @@ static void MyButtonIconActive(std::string name, std::string textvariable = {}, 
 	call({ name,"config","-image",icon,"-compound",((textvariable != "" ? "left" : "center")),"-textvariable",textvariable,"-width",std::to_string(width),"-background",background });
 	call({ "bind",name,"<Button-1>",commandId });
 	call({ "bind",name,"<Enter>",name + " config -image " + icon + "Active" + ((textvariable != "") ? (" -background " + hoverColor) : "") });
+	call({ "bind",name,"<FocusIn>",name + " config -image " + icon + "Active" + ((textvariable != "") ? (" -background " + hoverColor) : "") });
 	call({ "bind",name,"<Leave>",name + " config -image " + icon + ((textvariable != "") ? (" -background " + primaryColor) : "") });
+	call({ "bind",name,"<FocusOut>",name + " config -image " + icon + ((textvariable != "") ? (" -background " + primaryColor) : "") });
 	colorUpdates[name] = [](std::vector<std::string> cd)->int {
 		std::string name = cd[0];
 		std::string icon = cd[1];
 		std::string tvar = cd[2];
 		call({ "bind",name,"<Enter>",name + " config -image " + icon + "Active" + ((tvar != "") ? (" -background " + hoverColor) : "") });
+		call({ "bind",name,"<FocusIn>",name + " config -image " + icon + "Active" + ((tvar != "") ? (" -background " + hoverColor) : "") });
 		call({ "bind",name,"<Leave>",name + " config -image " + icon + ((tvar != "") ? (" -background " + primaryColor) : "") });
+		call({ "bind",name,"<FocusOut>",name + " config -image " + icon + ((tvar != "") ? (" -background " + primaryColor) : "") });
 		return 0;
 		};
 	clrUpdCd[name] = { name, icon, textvariable };
@@ -90,7 +94,9 @@ static void MyTab(std::string name, std::string textvariable = {}, std::string c
 	call({ name,"config","-image",bg,"-compound","center","-foreground","white" });
 	call({ "bind",name,"<Button-1>",command });
 	call({ "bind",name,"<Enter>",name + " config -image " + bgActive });
+	call({ "bind",name,"<FocusIn>",name + " config -image " + bgActive });
 	call({ "bind",name,"<Leave>",name + " config -image " + bg });
+	call({ "bind",name,"<FocusOut>",name + " config -image " + bg });
 }
 
 static void MyTabY(std::string name, std::string textvariable = {}, std::string command = {}) {
@@ -455,10 +461,12 @@ struct MyList {
 		size_t wid = this->width - 34 * functions.size() - pItm * (imageId != "");
 		control(wTxt,"labelframe",{"-bd","0","-labelanchor","w","-height",sHei,"-text",text,"-width",std::to_string(wid)});
 		control(wHol,"labelframe",{"-height",sHei,"-width",std::to_string(this->width) });
-		call({ "bind",wTxt,"<MouseWheel>",this->frameid+".mw %D" });
-		call({ "bind",wTxt,"<Button-1>",	 this->frameid+".b1 "+std::to_string(ir.order) });
-		call({ "bind",wPar,"<Enter>",		 this->frameid+".enter "+std::to_string(ir.order) });
-		call({ "bind",wPar,"<Leave>",		 this->frameid+".leave "+std::to_string(ir.order) });
+		call({ "bind",wTxt,"<MouseWheel>",	this->frameid+".mw %D" });
+		call({ "bind",wTxt,"<Button-1>",	this->frameid+".b1 "+std::to_string(ir.order) });
+		call({ "bind",wPar,"<Enter>",		this->frameid+".enter "+std::to_string(ir.order) });
+		call({ "bind",wPar,"<FocusIn>",		this->frameid+".enter "+std::to_string(ir.order) });
+		call({ "bind",wPar,"<Leave>",		this->frameid+".leave "+std::to_string(ir.order) });
+		call({ "bind",wPar,"<FocusOut>",	this->frameid+".leave "+std::to_string(ir.order) });
 		call({ "pack",wTxt,"-side","left","-fill","y" });
 		for (int i = functions.size()-2; i >= 0; i -= 2) {
 			std::string wBtn = wPar + ".button" + std::to_string(i/2);
@@ -578,8 +586,25 @@ struct MyList {
 
 struct MyEdit {
 	std::string id;
+	std::string content;
 	MyEdit(std::string name) {
-		control(name, "ttk::label", { "-text","","-image","texteditImage" });
+		this->id = name;
+		this->content = "";
+		call({ "set",name+".var","666" });
+		control(name, "ttk::label", { "-compound","center","-textvariable",name + ".var","-image","texteditImage"});
+		call({ "bind",name,"<ButtonPress-1>","focus " + name });
+		call({ "bind",name,"<FocusIn>",name+" config -image texteditImageActive" });
+		call({ "bind",name,"<FocusOut>",name+" config -image texteditImage" });
+		CreateCmd(name + ".key", [](ClientData clientData,
+			Tcl_Interp* interp, int argc, const char** argv)->int {
+				std::string name = Strings::slice1(argv[0], 0, -4);
+				char a[3];
+				a[0] = (char)std::atoi(argv[1]);
+				a[1] = 0;
+				//writeLog("ah! %s", name.c_str());
+				call({ "set",name+".var",call({"set",name+".var"})+a });
+				return 1;
+			}, 0);
 	}
 	~MyEdit() {
 
@@ -604,6 +629,7 @@ void turnDark(std::string name) {
 int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* argv[]) {
 	msgBxs++;
 	std::string name = ".w" + std::to_string(msgBxs);
+	call({ "bind",name,"<KeyPress>","keyGot %k" });
 	messageBoxes.push_back(name);
 	call({ "toplevel",name },0);
 	std::string title = argv[1];
@@ -622,19 +648,23 @@ int messageBox(ClientData clientData, Tcl_Interp* interp, int argc, const char* 
 	return 0;
 }
 
-int mRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
-	return ((int)r) << 24 | ((int)g) << 16 | ((int)b) << 8 | ((int)a) << 0;
+unsigned int mRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+	return ((unsigned int)r) << 24 | ((unsigned int)g) << 16 | ((unsigned int)b) << 8 | ((unsigned int)a) << 0;
 }
-unsigned char gR(int clr) { return (clr > 24) % 0xff; }
-unsigned char gG(int clr) { return (clr > 16) % 0xff; }
-unsigned char gB(int clr) { return (clr > 8 ) % 0xff; }
-unsigned char gA(int clr) { return (clr > 0 ) % 0xff; }
-//struct Image {
-//	Tk_PhotoImageBlock blk;
-//	Image(int wid, int hei) {
-//		this->blk.width = wid;
-//		this->blk.height = hei;
-//	}
-//};
+unsigned char gR(unsigned int clr) { return (clr > 24) % 0xff; }
+unsigned char gG(unsigned int clr) { return (clr > 16) % 0xff; }
+unsigned char gB(unsigned int clr) { return (clr > 8 ) % 0xff; }
+unsigned char gA(unsigned int clr) { return (clr > 0 ) % 0xff; }
+unsigned int readPixel(Tk_PhotoImageBlock blk, unsigned int x, unsigned int y) {
+	unsigned char* i = blk.pixelPtr+blk.pixelSize*(blk.width*y+x);
+	return mRGBA(i[blk.offset[0]], i[blk.offset[1]], i[blk.offset[2]], i[blk.offset[3]]);
+}
+void setPixel(Tk_PhotoImageBlock blk, unsigned int x, unsigned int y, unsigned int color) {
+	unsigned char* i = blk.pixelPtr+blk.pixelSize*(blk.width*y+x);
+	i[blk.offset[0]] = gR(color);
+	i[blk.offset[1]] = gG(color);
+	i[blk.offset[2]] = gB(color);
+	i[blk.offset[3]] = gA(color);
+}
 
 #endif // RIVERLAUNCHER3_CONTROL_H
